@@ -21,7 +21,7 @@
 import os
 
 DB_NAME = os.environ.get("DB_NAME", "polkascan")
-DB_HOST = os.environ.get("DB_HOST", "mysql")
+DB_HOST = os.environ.get("DB_HOST", "192.168.1.120")
 DB_PORT = os.environ.get("DB_PORT", 3306)
 DB_USERNAME = os.environ.get("DB_USERNAME", "root")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "root")
