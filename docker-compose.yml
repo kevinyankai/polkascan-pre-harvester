@@ -3,8 +3,8 @@ version: '3.2'
 services:
 
   harvester-api:
-    build: .
-    image: &app polkascan-harvester
+    # build: .
+    image: &app registry.cn-beijing.aliyuncs.com/yk060520/substrate-api:latest
     ports:
       - '8000:8000'
     volumes:
@@ -18,10 +18,10 @@ services:
     depends_on:
       - redis
       - mysql
-      - substrate-node
+      #- substrate-node
 
   harvester-worker:
-    build: .
+    # build: .
     image: *app
     volumes:
       - '.:/usr/src/app'
@@ -32,7 +32,7 @@ services:
       - mysql
 
   harvester-beat:
-    build: .
+    # build: .
     image: *app
     volumes:
       - '.:/usr/src/app'
@@ -42,7 +42,7 @@ services:
       - redis
 
   harvester-monitor:
-    build: .
+    # build: .
     image: *app
     ports:
       - '5555:5555'
