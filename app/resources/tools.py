@@ -27,7 +27,7 @@ from scalecodec.metadata import MetadataDecoder
 from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
 
 from substrateinterface import SubstrateInterface
-from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION
+from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
 
 
 class ExtractMetadataResource(BaseResource):
@@ -35,7 +35,7 @@ class ExtractMetadataResource(BaseResource):
     def on_get(self, req, resp):
 
         if 'block_hash' in req.params:
-            substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+            substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
             metadata = substrate.get_block_metadata(req.params.get('block_hash'))
 
             resp.status = falcon.HTTP_200
@@ -54,7 +54,7 @@ class ExtractExtrinsicsResource(BaseResource):
 
     def on_get(self, req, resp):
 
-        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
 
         # Get extrinsics
         json_block = substrate.get_chain_block(req.params.get('block_hash'))
@@ -86,7 +86,7 @@ class ExtractEventsResource(BaseResource):
 
     def on_get(self, req, resp):
 
-        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
 
         # Get Parent hash
         json_block = substrate.get_block_header(req.params.get('block_hash'))
@@ -110,7 +110,7 @@ class StorageValidatorResource(BaseResource):
 
     def on_get(self, req, resp):
 
-        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
 
         resp.status = falcon.HTTP_200
 
