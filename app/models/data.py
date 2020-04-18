@@ -90,7 +90,7 @@ class Block(BaseModel):
 
     @classmethod
     def get_head(cls, session):
-        with session.begin():
+        with session.begin(subtransactions=True):
             query = session.query(cls)
             model = query.order_by(cls.id.desc()).first()
 

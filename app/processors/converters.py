@@ -37,7 +37,7 @@ from substrateinterface import SubstrateInterface, SubstrateRequestException
 
 from app.settings import DEBUG, SUBSTRATE_RPC_URL, ACCOUNT_AUDIT_TYPE_NEW, ACCOUNT_INDEX_AUDIT_TYPE_NEW, \
     SUBSTRATE_MOCK_EXTRINSICS, FINALIZATION_BY_BLOCK_CONFIRMATIONS, SEARCH_INDEX_SLASHED_ACCOUNT, \
-    SEARCH_INDEX_BALANCETRANSFER, SUBSTRATE_METADATA_VERSION
+    SEARCH_INDEX_BALANCETRANSFER, SUBSTRATE_METADATA_VERSION, SUBSTRATE_ADDRESS_TYPE, TYPE_REGISTRY
 from app.models.data import Extrinsic, Block, Event, Runtime, RuntimeModule, RuntimeCall, RuntimeCallParam, \
     RuntimeEvent, RuntimeEventAttribute, RuntimeType, RuntimeStorage, BlockTotal, RuntimeConstant, AccountAudit, \
     AccountIndexAudit, ReorgBlock, ReorgExtrinsic, ReorgEvent, ReorgLog, RuntimeErrorMessage
@@ -59,7 +59,7 @@ class PolkascanHarvesterService(BaseService):
 
     def __init__(self, db_session, type_registry='default'):
         self.db_session = db_session
-        self.substrate = SubstrateInterface(SUBSTRATE_RPC_URL, type_registry_preset=type_registry)
+        self.substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = type_registry)
         self.metadata_store = {}
 
     def process_genesis(self, block):
@@ -677,7 +677,7 @@ class PolkascanHarvesterService(BaseService):
     def integrity_checks(self):
 
         # 1. Check finalized head
-        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
 
         if FINALIZATION_BY_BLOCK_CONFIRMATIONS > 0:
             finalized_block_hash = substrate.get_chain_head()

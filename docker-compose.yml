@@ -33,9 +33,9 @@ services:
       - '.:/usr/src/app'
     command: celery -A app.tasks worker --loglevel=INFO
     environment: *env
-    depends_on:
-      - redis
-      - mysql
+#    depends_on:
+#      - redis
+#      - mysql
 
   harvester-beat:
     # build: .
@@ -44,8 +44,8 @@ services:
       - '.:/usr/src/app'
     command: celery -A app.tasks beat --loglevel=INFO  --schedule="data/celerybeat-schedule" --pidfile="data/celerybeat.pid"
     environment: *env
-    depends_on:
-      - redis
+    #depends_on:
+    #  - redis
 
   harvester-monitor:
     # build: .

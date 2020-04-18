@@ -35,7 +35,7 @@ from app.processors.converters import PolkascanHarvesterService, HarvesterCouldN
     BlockIntegrityError
 from substrateinterface import SubstrateInterface
 
-from app.settings import DB_CONNECTION, DEBUG, SUBSTRATE_RPC_URL, TYPE_REGISTRY, \
+from app.settings import DB_CONNECTION, DEBUG, SUBSTRATE_RPC_URL, SUBSTRATE_ADDRESS_TYPE, TYPE_REGISTRY, \
     SEARCH_INDEX_SLASHED_ACCOUNT, SEARCH_INDEX_BALANCETRANSFER, SEARCH_INDEX_HEARTBEATRECEIVED, FINALIZATION_ONLY
 
 CELERY_BROKER = os.environ.get('CELERY_BROKER')
@@ -87,7 +87,7 @@ def accumulate_block_recursive(self, block_hash, end_block_hash=None):
 
         if not max_block_id:
             # Speed up accumulating by creating several entry points
-            substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+            substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
             block_nr = substrate.get_block_number(block_hash)
             if block_nr > 100:
                 for entry_point in range(0, block_nr, block_nr // 4)[1:-1]:
@@ -186,7 +186,7 @@ def rebuilding_search_index(self, search_index_id, truncate=False):
 @app.task(base=BaseTask, bind=True)
 def start_harvester(self, check_gaps=False):
 
-    substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+    substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
 
     block_sets = []
 

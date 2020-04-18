@@ -33,7 +33,7 @@ from app.schemas import load_schema
 from app.processors.converters import PolkascanHarvesterService, BlockAlreadyAdded, BlockIntegrityError
 from substrateinterface import SubstrateInterface
 from app.tasks import accumulate_block_recursive, start_harvester, rebuilding_search_index
-from app.settings import SUBSTRATE_RPC_URL, TYPE_REGISTRY
+from app.settings import SUBSTRATE_RPC_URL, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
 
 
 class PolkascanStartHarvesterResource(BaseResource):
@@ -115,7 +115,7 @@ class PolkascanProcessBlockResource(BaseResource):
         block_hash = None
 
         if req.media.get('block_id'):
-            substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+            substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
             block_hash = substrate.get_block_hash(req.media.get('block_id'))
         elif req.media.get('block_hash'):
             block_hash = req.media.get('block_hash')

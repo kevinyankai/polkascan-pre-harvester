@@ -19,7 +19,10 @@
 #  tools.py
 
 import falcon
+from scalecodec.exceptions import RemainingScaleBytesNotEmptyException
+from sqlalchemy import and_
 
+from app.models.data import Block, Session, RuntimeStorage, Extrinsic
 from app.resources.base import BaseResource
 
 from scalecodec.base import ScaleBytes
@@ -35,7 +38,8 @@ class ExtractMetadataResource(BaseResource):
     def on_get(self, req, resp):
 
         if 'block_hash' in req.params:
-            substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
+            substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
+                                           type_registry_preset=TYPE_REGISTRY)
             metadata = substrate.get_block_metadata(req.params.get('block_hash'))
 
             resp.status = falcon.HTTP_200
@@ -54,7 +58,8 @@ class ExtractExtrinsicsResource(BaseResource):
 
     def on_get(self, req, resp):
 
-        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
+        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
+                                       type_registry_preset=TYPE_REGISTRY)
 
         # Get extrinsics
         json_block = substrate.get_chain_block(req.params.get('block_hash'))
@@ -68,7 +73,7 @@ class ExtractExtrinsicsResource(BaseResource):
             # Get metadata
             metadata_decoder = substrate.get_block_metadata(json_block['block']['header']['parentHash'])
 
-            #result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
+            # result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
             result = []
 
             for extrinsic in extrinsics:
@@ -85,8 +90,8 @@ class ExtractExtrinsicsResource(BaseResource):
 class ExtractEventsResource(BaseResource):
 
     def on_get(self, req, resp):
-
-        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
+        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
+                                       type_registry_preset=TYPE_REGISTRY)
 
         # Get Parent hash
         json_block = substrate.get_block_header(req.params.get('block_hash'))
@@ -98,7 +103,8 @@ class ExtractEventsResource(BaseResource):
         events_decoder = substrate.get_block_events(req.params.get('block_hash'), metadata_decoder=metadata_decoder)
 
         resp.status = falcon.HTTP_201
-        resp.media = {'events': events_decoder.value, 'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
+        resp.media = {'events': events_decoder.value,
+                      'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
 
 
 class HealthCheckResource(BaseResource):
@@ -109,8 +115,8 @@ class HealthCheckResource(BaseResource):
 class StorageValidatorResource(BaseResource):
 
     def on_get(self, req, resp):
-
-        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
+        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
+                                       type_registry_preset=TYPE_REGISTRY)
 
         resp.status = falcon.HTTP_200
 
@@ -143,3 +149,67 @@ class StorageValidatorResource(BaseResource):
         resp.media = {'validators': validators, 'current_era': current_era}
 
 
+# 获取Metadata
+class MetadataResource(BaseResource):
+    def on_get(self, req, resp):
+        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
+                                       type_registry_preset=TYPE_REGISTRY)
+        resp.status = falcon.HTTP_200
+        head = Block.get_head(self.session);
+        head_hash = substrate.get_chain_head()
+        head_number = substrate.get_block_number(head_hash)
+        finalised_head_hash = substrate.get_chain_finalised_head()
+        finalised_head_number = substrate.get_block_number(finalised_head_hash)
+
+        extrinsicCount = Extrinsic.query(self.session).filter(Extrinsic.signed == 1).count()
+
+        storage_call = RuntimeStorage.query(self.session).filter_by(
+            module_id = 'session',
+            name = 'Validators',
+            spec_version = head.spec_version_id
+        ).first()
+
+        if storage_call:
+            try:
+                validators = substrate.get_storage(
+                    block_hash=head.hash,
+                    module="Session",
+                    function="Validators",
+                    return_scale_type=storage_call.get_return_type(),
+                    metadata_version=SUBSTRATE_METADATA_VERSION
+                ) or []
+            except RemainingScaleBytesNotEmptyException:
+                pass
+
+        storage_call = RuntimeStorage.query(self.session).filter_by(
+            module_id='staking',
+            name='ValidatorCount',
+            spec_version=head.spec_version_id
+        ).first()
+
+        if storage_call:
+            try:
+                validator_count = substrate.get_storage(
+                    block_hash=head.hash,
+                    module="Staking",
+                    function="ValidatorCount",
+                    return_scale_type=storage_call.get_return_type(),
+                    metadata_version=SUBSTRATE_METADATA_VERSION
+                ) or []
+            except RemainingScaleBytesNotEmptyException:
+                pass
+
+        transfers_count = Extrinsic.query(self.session).filter(
+            and_(Extrinsic.module_id == 'balances', Extrinsic.call_id == 'transfer')).count()
+
+        resp.media = {
+            'status': 'success',
+            'data': {
+                'blockNumber': head_number,
+                'finalizedBlockNumber': finalised_head_number,
+                'extrinsics': extrinsicCount,
+                'currValidators': len(validators),
+                'validators': validator_count,
+                'transfersCount': transfers_count
+            }
+        }

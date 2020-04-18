@@ -26,7 +26,7 @@ from app.processors.base import EventProcessor
 from app.settings import ACCOUNT_AUDIT_TYPE_NEW, ACCOUNT_AUDIT_TYPE_REAPED, ACCOUNT_INDEX_AUDIT_TYPE_NEW, \
     ACCOUNT_INDEX_AUDIT_TYPE_REAPED, SUBSTRATE_RPC_URL, LEGACY_SESSION_VALIDATOR_LOOKUP, SEARCH_INDEX_SLASHED_ACCOUNT, \
     SEARCH_INDEX_BALANCETRANSFER, SEARCH_INDEX_HEARTBEATRECEIVED, SUBSTRATE_METADATA_VERSION, \
-    IDENTITY_TYPE_SET, IDENTITY_TYPE_CLEARED, IDENTITY_TYPE_KILLED, IDENTITY_JUDGEMENT_TYPE_GIVEN
+    IDENTITY_TYPE_SET, IDENTITY_TYPE_CLEARED, IDENTITY_TYPE_KILLED, IDENTITY_JUDGEMENT_TYPE_GIVEN, SUBSTRATE_ADDRESS_TYPE, TYPE_REGISTRY
 
 from app.utils.ss58 import ss58_encode
 from scalecodec import ScaleBytes, Proposal
@@ -46,7 +46,7 @@ class NewSessionEventProcessor(EventProcessor):
         nominators = []
         validation_session_lookup = {}
 
-        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
 
         # Retrieve current era
         storage_call = RuntimeStorage.query(db_session).filter_by(

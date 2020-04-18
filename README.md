@@ -30,4 +30,16 @@ Method: POST
 参数：block_id | block_hash （均为16进制）  
 返回值：   
 &emsp;&emsp;&emsp;result: added | already exist  
-&emsp;&emsp;&emsp;parentHash: 父区块Hash
+&emsp;&emsp;&emsp;parentHash: 父区块Hash  
+
+### 4. /tools/events/extract ###
+Method: GET  
+说明：获取指定区块的事件详情  
+参数：block_hash  
+返回值：JSON 格式的区块事件详情信息  
+
+### 5. /tools/extrinsics/extract ###
+Method: GET  
+说明：获取指定区块的交易详情  
+参数：block_hash  
+返回值：JSON 格式的区块交易详情信息
