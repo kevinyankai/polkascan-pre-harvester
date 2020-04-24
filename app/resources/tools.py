@@ -17,6 +17,8 @@
 #  along with Polkascan. If not, see <http://www.gnu.org/licenses/>.
 #
 #  tools.py
+import time
+from datetime import datetime
 
 import falcon
 from scalecodec.exceptions import RemainingScaleBytesNotEmptyException
@@ -212,4 +214,29 @@ class MetadataResource(BaseResource):
                 'validators': validator_count,
                 'transfersCount': transfers_count
             }
+        }
+
+# 获取最新区块列表，取20个
+class LatestBlocksResource(BaseResource):
+    def on_get(self, req, resp):
+        blocks = Block.query(self.session).order_by(Block.id.desc()).limit(20).all();
+
+        # resp.status = falcon.HTTP_200
+        # substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
+        #                                type_registry_preset=TYPE_REGISTRY)
+        # start_block_hash_finalized = substrate.get_chain_finalised_head()
+        # f = substrate.get_chain_block(start_block_hash_finalized)
+        # start_block_hash = substrate.get_chain_head()
+        # uf = substrate.get_chain_block(start_block_hash)
+        result = [{
+            "block_num": blockData.id,
+            "event_count": blockData.count_events,
+            "extrinsics_count": blockData.count_extrinsics,
+            "block_timestamp": time.mktime(blockData.datetime.timetuple()),
+            # "finalized": "1"
+        } for blockData in blocks]
+
+        resp.media = {
+            'status': 'success',
+            'data': result
         }

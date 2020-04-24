@@ -31,8 +31,8 @@ from app.middleware.sessionmanager import SQLAlchemySessionManager
 from app.resources.harvester import PolkascanStartHarvesterResource, PolkascanStopHarvesterResource, \
     PolkascanStatusHarvesterResource, PolkascanProcessBlockResource, \
     PolkaScanCheckHarvesterTaskResource, SequenceBlockResource, StartSequenceBlockResource, StartIntegrityResource
-from app.resources.tools import ExtractMetadataResource, ExtractExtrinsicsResource, \
-    HealthCheckResource, ExtractEventsResource
+from app.resources.tools import ExtractMetadataResource, ExtractExtrinsicsResource, MetadataResource, \
+    HealthCheckResource, ExtractEventsResource, LatestBlocksResource
 
 # Database connection
 engine = create_engine(DB_CONNECTION, echo=DEBUG, isolation_level="READ_UNCOMMITTED")
@@ -56,3 +56,6 @@ app.add_route('/task/result/{task_id}', PolkaScanCheckHarvesterTaskResource())
 app.add_route('/tools/metadata/extract', ExtractMetadataResource())
 app.add_route('/tools/extrinsics/extract', ExtractExtrinsicsResource())
 app.add_route('/tools/events/extract', ExtractEventsResource())
+
+app.add_route('/metadata', MetadataResource())
+app.add_route('/latest-blocks', LatestBlocksResource())

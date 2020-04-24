@@ -14,7 +14,7 @@ services:
       #- CELERY_BROKER=redis://redis:6379/0
       #- CELERY_BACKEND=redis://redis:6379/0
       - CELERY_BROKER=redis://192.168.1.120:6379/0
-      - CELERY_BACKEND=redis://192.168.1.120:6379/0
+      - CELERY_BACKEND=redis://192.168.1.120:6379/1
       - PYTHONPATH=/usr/src/app
       - ENVIRONMENT=dev
       - DB_CONNECTION=mysql+mysqlconnector://root:root@192.168.1.120:3306/polkascan
@@ -33,9 +33,9 @@ services:
       - '.:/usr/src/app'
     command: celery -A app.tasks worker --loglevel=INFO
     environment: *env
-#    depends_on:
-#      - redis
-#      - mysql
+    #depends_on:
+    #  - redis
+    #  - mysql
 
   harvester-beat:
     # build: .
