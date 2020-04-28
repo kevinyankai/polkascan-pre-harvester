@@ -17,9 +17,12 @@
 #  along with Polkascan. If not, see <http://www.gnu.org/licenses/>.
 #
 #  data.py
+import datetime as datetime
 
+import pytz
 import sqlalchemy as sa
 from sqlalchemy import text
+from sqlalchemy.sql import func
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import relationship
 
@@ -60,7 +63,7 @@ class Block(BaseModel):
     range10000 = sa.Column(sa.Integer(), nullable=False)
     range100000 = sa.Column(sa.Integer(), nullable=False)
     range1000000 = sa.Column(sa.Integer(), nullable=False)
-    datetime = sa.Column(sa.DateTime(timezone=True))
+    datetime = sa.Column(sa.DateTime(timezone=True), default=datetime.datetime.now(tz=pytz.timezone('Asia/Shanghai')))
     year = sa.Column(sa.Integer(), nullable=True)
     month = sa.Column(sa.Integer(), nullable=True)
     week = sa.Column(sa.Integer(), nullable=True)

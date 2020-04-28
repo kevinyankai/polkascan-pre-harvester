@@ -33,6 +33,7 @@ from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61
 
 from substrateinterface import SubstrateInterface
 from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
+from app.utils.ss58 import ss58_encode
 
 
 class ExtractMetadataResource(BaseResource):
@@ -221,13 +222,7 @@ class LatestBlocksResource(BaseResource):
     def on_get(self, req, resp):
         blocks = Block.query(self.session).order_by(Block.id.desc()).limit(20).all();
 
-        # resp.status = falcon.HTTP_200
-        # substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
-        #                                type_registry_preset=TYPE_REGISTRY)
-        # start_block_hash_finalized = substrate.get_chain_finalised_head()
-        # f = substrate.get_chain_block(start_block_hash_finalized)
-        # start_block_hash = substrate.get_chain_head()
-        # uf = substrate.get_chain_block(start_block_hash)
+        resp.status = falcon.HTTP_200
         result = [{
             "block_num": blockData.id,
             "event_count": blockData.count_events,
@@ -239,4 +234,49 @@ class LatestBlocksResource(BaseResource):
         resp.media = {
             'status': 'success',
             'data': result
+        }
+
+# 查询最近的转账交易
+class LatestTransfersResource(BaseResource):
+    def on_get(self, req, resp):
+        resp.status = falcon.HTTP_200
+
+        extrinsics = Extrinsic.query(self.session).filter(
+            and_(Extrinsic.module_id == 'balances', Extrinsic.call_id == 'transfer')).order_by(
+            Extrinsic.block_id.desc()).limit(20).all()
+
+        results = []
+        extrinsicDict = dict()
+        for extrinsic in extrinsics:
+            if not extrinsicDict.has_key(extrinsic.block_id):
+                extrinsicDict
+
+            fromAddr = ss58_encode(extrinsic.address.replace('0x', ''))
+            # extrinsicHash = '0x{}'.format(extrinsic.extrinsic_hash)
+            extrinsicHash = '0x{}'.format(ss58_encode(extrinsic.extrinsic_hash))
+
+
+        # substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=42,
+        #                                type_registry_preset='default')
+        # json_block = substrate.get_chain_block('0x6e33c5c93609cc271dc31b61f254f99760a8191fa28bc0f40c4edc6e9250a95d')
+        # extrinsics_data = json_block['block'].pop('extrinsics')
+        # result = []
+        # metadata = substrate.get_block_metadata(
+        #     block_hash='0x6e33c5c93609cc271dc31b61f254f99760a8191fa28bc0f40c4edc6e9250a95d')
+        #
+        # for extrinsic in extrinsics_data:
+        #     extrinsics_decoder = ExtrinsicsDecoder(
+        #         data=ScaleBytes(extrinsic),
+        #         metadata=metadata
+        #     )
+        #
+        #     extrinsic_data = extrinsics_decoder.decode()
+        #     result.append(extrinsic_data)
+        #
+        # accountId = '0x8eaf04151687736326c9fea17e25fc5287613693c912909cb226aa4794f26a48'
+        # accountAddress = ss58_encode(accountId.replace('0x', ''), 42)
+        resp.media = {
+            'status': 'success',
+            'data': result,
+            'address': accountAddress
         }

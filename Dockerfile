@@ -18,5 +18,9 @@ RUN pip3 install -r requirements.txt
 
 RUN apk del .build-deps gcc libc-dev git
 
+# set timezone
+RUN apk add --no-cache tzdata
+ENV TZ=Asia/Shanghai
+
 # add app
 COPY . /usr/src/app
