@@ -17,12 +17,9 @@
 #  along with Polkascan. If not, see <http://www.gnu.org/licenses/>.
 #
 #  data.py
-import datetime as datetime
 
-import pytz
 import sqlalchemy as sa
 from sqlalchemy import text
-from sqlalchemy.sql import func
 from sqlalchemy.dialects.mysql import LONGTEXT
 from sqlalchemy.orm import relationship
 
@@ -63,7 +60,7 @@ class Block(BaseModel):
     range10000 = sa.Column(sa.Integer(), nullable=False)
     range100000 = sa.Column(sa.Integer(), nullable=False)
     range1000000 = sa.Column(sa.Integer(), nullable=False)
-    datetime = sa.Column(sa.DateTime(timezone=True), default=datetime.datetime.now(tz=pytz.timezone('Asia/Shanghai')))
+    datetime = sa.Column(sa.DateTime(timezone=True))
     year = sa.Column(sa.Integer(), nullable=True)
     month = sa.Column(sa.Integer(), nullable=True)
     week = sa.Column(sa.Integer(), nullable=True)
@@ -217,6 +214,26 @@ class Extrinsic(BaseModel):
 
     def serialize_id(self):
         return '{}-{}'.format(self.block_id, self.extrinsic_idx)
+
+    @classmethod
+    def latest_extrinsics(cls, session):
+        return session.execute(text("""
+                                        SELECT 
+                                            e.address, e.extrinsic_hash, e.params, b.datetime 
+                                        FROM 
+                                            data_extrinsic e 
+                                        LEFT JOIN 
+                                            data_block b 
+                                        ON 
+                                            e.block_id = b.id
+                                        WHERE 
+                                            e.module_id = 'balances' AND e.call_id = 'transfer' 
+                                        ORDER BY 
+                                            e.block_id DESC 
+                                        LIMIT 
+                                            20
+                                     """)
+                               )
 
 
 class Log(BaseModel):

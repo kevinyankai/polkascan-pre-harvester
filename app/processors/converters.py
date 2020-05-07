@@ -20,6 +20,8 @@
 import json
 import math
 
+import dateutil
+import pytz
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -513,6 +515,13 @@ class PolkascanHarvesterService(BaseService):
 
             # Lookup result of extrinsic
             extrinsic_success = extrinsic_success_idx.get(extrinsic_idx, False)
+
+            if extrinsic_data['call_module'] == 'timestamp':
+                value = extrinsic_data['params'][0].get('value')
+                utc = dateutil.parser.parse(value).utcnow()
+                time = utc.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai'))
+
+                extrinsic_data['params'][0]['value'] = time.strftime('%Y-%m-%dT%H-%M-%S')
 
             model = Extrinsic(
                 block_id=block_id,
