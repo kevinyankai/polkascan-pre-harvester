@@ -9,7 +9,7 @@ celery==4.1.1
 certifi==2018.11.29
 chardet==3.0.4
 dictalchemy==0.1.2.7
-falcon==1.4.1
+falcon==2.0.0
 flower==0.9.3
 greenlet==0.4.15
 gunicorn==19.9.0

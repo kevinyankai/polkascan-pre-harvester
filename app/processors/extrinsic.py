@@ -41,7 +41,7 @@ class TimestampExtrinsicProcessor(ExtrinsicProcessor):
             for param in self.extrinsic.params:
                 if param.get('name') == 'now':
                     # self.block.set_datetime(dateutil.parser.parse(param.get('value')).replace(tzinfo=pytz.UTC))
-                    # modified by yankai ĞŞ¸ÄĞ´ÈëÊı¾İ¿âÊ±¼äÊ±ÇøÎÊÌâ
+                    # modified by yankai ä¿®æ”¹å†™å…¥æ•°æ®åº“æ—¶é—´æ—¶åŒºé—®é¢˜
                     utc = dateutil.parser.parse(param.get('value')).utcnow()
                     tzchina = utc.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai'))
                     self.block.set_datetime(tzchina)

@@ -24,10 +24,11 @@ from datetime import datetime
 import dateutil
 import falcon
 import pytz
+from scalecodec import U8
 from scalecodec.exceptions import RemainingScaleBytesNotEmptyException
 from sqlalchemy import and_
 
-from app.models.data import Block, Session, RuntimeStorage, Extrinsic
+from app.models.data import Block, Session, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent
 from app.resources.base import BaseResource
 
 from scalecodec.base import ScaleBytes
@@ -257,15 +258,16 @@ class GetBlockInfoByKeyResource(BaseResource):
             resp.media = {'errors': ['Either blockHash or block_id should be supplied']}
 
         if blockHash:
-            # substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
-            #                                type_registry_preset=TYPE_REGISTRY)
             resp.status = falcon.HTTP_200
             block = Block.query(self.session).filter(Block.hash == blockHash).first()
             blockInfo = {}
 
             if block:
                 blockInfo["timestamp"] = block.datetime.strftime("%Y-%m-%d %H:%M:%S")
-                blockInfo["block_has"]= block.hash
+                blockInfo["block_hash"]= block.hash
+                blockInfo["block_id"] = block.id
+                blockInfo["parent_id"] = block.id - 1 if block.id > 0 else 0
+                blockInfo["child_id"] = block.id + 1
                 blockInfo["parent_hash"] = block.parent_hash
                 blockInfo["state_root"] = block.state_root
                 blockInfo["extrinsic_root"] = block.extrinsics_root
@@ -273,34 +275,72 @@ class GetBlockInfoByKeyResource(BaseResource):
                 blockInfo["count_extrinsic"] = block.count_extrinsics
                 blockInfo["count_event"] = block.count_events
                 blockInfo["count_log"] = block.count_log
+                blockInfo["age"] = time.mktime(block.datetime.timetuple())
 
-            extrinsics = Extrinsic.query(self.session).filter(Extrinsic.block_id == block.id).all()
-            extrinsicsObj = [{
-                "extrinsic_id": '{}-{}'.format(block.id, extrinsic.extrinsic_idx),
-                "hash": extrinsic.extrinsic_hash if extrinsic.extrinsic_hash else None,
-                "age": block.datetime.strftime("%Y-%m-%d %H:%M:%S"),
-                "result": extrinsic.success,
-                "address": extrinsic.address if extrinsic.address else None,
-                "module": extrinsic.module_id,
-                "fee": None,
-                "nonce": extrinsic.nonce if extrinsic.nonce else None,
-                "call": extrinsic.call_id,
-                "operation":'{}({})'.format(extrinsic.module_id, extrinsic.call_id),
-                "signature": extrinsic.signature if extrinsic.signature else None
-            } for extrinsic in extrinsics]
+                # 获取和区块相关的交易信息
+                extrinsics = Extrinsic.query(self.session).filter(Extrinsic.block_id == block.id).all()
+                extrinsicsObj = [{
+                    "extrinsic_id": '{}-{}'.format(block.id, extrinsic.extrinsic_idx),
+                    "hash": extrinsic.extrinsic_hash if extrinsic.extrinsic_hash else None,
+                    "age": time.mktime(block.datetime.timetuple()),
+                    "result": extrinsic.success,
+                    # "address": extrinsic.address if extrinsic.address else None,
+                    # "module": extrinsic.module_id,
+                    # "fee": None,
+                    # "nonce": extrinsic.nonce if extrinsic.nonce else None,
+                    # "call": extrinsic.call_id,
+                    "operation":'{}({})'.format(extrinsic.module_id, extrinsic.call_id),
+                    "params": extrinsic.params
+                    # "signature": extrinsic.signature if extrinsic.signature else None
+                } for extrinsic in extrinsics]
 
-            blockInfo['extrinsics'] = extrinsicsObj
+                # 获取和区块相关的日志信息
+                logs = Log.query(self.session).filter(Log.block_id == block.id).all()
+                logsObj = [{
+                    "log_id": '{}-{}'.format(block.id, log.log_idx),
+                    "block_id": block.id,
+                    "type": log.type,
+                    "data": log.data['value']
+                } for log in logs]
 
+                # 获取和区块相关的事件信息
+                events = Event.query(self.session).filter(Event.block_id == block.id).all()
+                eventObj = [{
+                    "id": '{}-{}'.format(block.id, event.event_idx),
+                    "block_id": block.id,
+                    "block_hash": block.hash,
+                    "module_id": event.module_id,
+                    "event_id": event.event_id,
+                    "attributes": event.attributes,
+                    "operation": '{}({})'.format(event.module_id, event.event_id),
+                    "desc": self.getEventDesc(event.module_id, event.event_id),
+                    "hash": self.getEventHash(block.id, event.extrinsic_idx)
+                } for event in events]
 
             resp.media = {
                 'status': 'success',
-                'data': blockInfo
+                'data': {
+                    "block_info": blockInfo,
+                    "extrinsics": extrinsicsObj,
+                    "logs": logsObj,
+                    "events": eventObj
+                }
             }
-
         else:
             resp.status = falcon.HTTP_404
             resp.media = {'result': 'Block not found'}
 
+    def getEventDesc(self, moduleId, eventId):
+        runtimeEvent = RuntimeEvent.query(self.session).filter(and_(RuntimeEvent.module_id == moduleId, RuntimeEvent.event_id == eventId)).first()
+        if runtimeEvent:
+            return runtimeEvent.documentation
+        return ""
+
+    def getEventHash(self, blockId, extrinsicIdx):
+        extrinsic = Extrinsic.query(self.session).filter(and_(Extrinsic.block_id == blockId, Extrinsic.extrinsic_idx == extrinsicIdx)).first()
+        if extrinsic:
+            return extrinsic.extrinsic_hash
+        return None
 
 # 查询最近的转账交易
 class LatestTransfersResource(BaseResource):
