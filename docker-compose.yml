@@ -3,7 +3,7 @@ version: '3.2'
 services:
 
   harvester-api:
-    # build: .
+    #build: .
     image: &app registry.cn-beijing.aliyuncs.com/yk060520/substrate-api:latest
     ports:
       - '8000:8000'
@@ -30,7 +30,7 @@ services:
       #- substrate-node
 
   harvester-worker:
-    # build: .
+    #build: .
     image: *app
     volumes:
       - '.:/usr/src/app'
