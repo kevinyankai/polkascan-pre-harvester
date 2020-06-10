@@ -20,29 +20,24 @@
 import json
 import math
 
-import dateutil
-import pytz
-from sqlalchemy import func
-from sqlalchemy.exc import SQLAlchemyError
+from app import settings
 
+from sqlalchemy import func, distinct
+from sqlalchemy.exc import SQLAlchemyError
 from app.models.harvester import Status
 from app.processors import NewSessionEventProcessor, Log, SlashEventProcessor, BalancesTransferProcessor
-from scalecodec import U32
-from scalecodec.base import ScaleBytes, ScaleDecoder, RuntimeConfiguration
+from scalecodec.base import ScaleBytes, ScaleDecoder
 from scalecodec.exceptions import RemainingScaleBytesNotEmptyException
-from scalecodec.metadata import MetadataDecoder
-from scalecodec.block import ExtrinsicsDecoder, EventsDecoder, ExtrinsicsBlock61181Decoder
+from scalecodec.block import ExtrinsicsDecoder
 
 from app.processors.base import BaseService, ProcessorRegistry
-from scalecodec.type_registry import load_type_registry_preset
-from substrateinterface import SubstrateInterface, SubstrateRequestException
+from scalecodec.type_registry import load_type_registry_file
+from substrateinterface import SubstrateInterface, SubstrateRequestException, xxh128
 
-from app.settings import DEBUG, SUBSTRATE_RPC_URL, ACCOUNT_AUDIT_TYPE_NEW, ACCOUNT_INDEX_AUDIT_TYPE_NEW, \
-    SUBSTRATE_MOCK_EXTRINSICS, FINALIZATION_BY_BLOCK_CONFIRMATIONS, SEARCH_INDEX_SLASHED_ACCOUNT, \
-    SEARCH_INDEX_BALANCETRANSFER, SUBSTRATE_METADATA_VERSION, SUBSTRATE_ADDRESS_TYPE, TYPE_REGISTRY
 from app.models.data import Extrinsic, Block, Event, Runtime, RuntimeModule, RuntimeCall, RuntimeCallParam, \
     RuntimeEvent, RuntimeEventAttribute, RuntimeType, RuntimeStorage, BlockTotal, RuntimeConstant, AccountAudit, \
-    AccountIndexAudit, ReorgBlock, ReorgExtrinsic, ReorgEvent, ReorgLog, RuntimeErrorMessage
+    AccountIndexAudit, ReorgBlock, ReorgExtrinsic, ReorgEvent, ReorgLog, RuntimeErrorMessage, Account, \
+    AccountInfoSnapshot, SearchIndex
 
 
 class HarvesterCouldNotAddBlock(Exception):
@@ -59,9 +54,19 @@ class BlockIntegrityError(Exception):
 
 class PolkascanHarvesterService(BaseService):
 
-    def __init__(self, db_session, type_registry='default'):
+    def __init__(self, db_session, type_registry='default', type_registry_file=None):
         self.db_session = db_session
-        self.substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = type_registry)
+
+        if type_registry_file:
+            custom_type_registry = load_type_registry_file(type_registry_file)
+        else:
+            custom_type_registry = None
+
+        self.substrate = SubstrateInterface(
+            url=settings.SUBSTRATE_RPC_URL,
+            type_registry=custom_type_registry,
+            type_registry_preset=type_registry
+        )
         self.metadata_store = {}
 
     def process_genesis(self, block):
@@ -71,58 +76,128 @@ class PolkascanHarvesterService(BaseService):
         block.set_datetime(child_block.datetime)
 
         # Retrieve genesis accounts
-        genesis_account_page_count = self.substrate.get_runtime_state(
-            module="Indices",
-            storage_function="NextEnumSet",
-            block_hash=block.hash
-        ).get('result', 0)
+        if settings.get_versioned_setting('SUBSTRATE_STORAGE_INDICES', block.spec_version_id) == 'Accounts':
 
-        # Get Accounts on EnumSet
-        block.count_accounts_new = 0
-        block.count_accounts = 0
+            # Get accounts from storage keys
+            storage_key_prefix = self.substrate.generate_storage_hash(
+                storage_module='System',
+                storage_function='Account',
+                metadata_version=settings.SUBSTRATE_METADATA_VERSION
+            )
 
-        for enum_set_nr in range(0, genesis_account_page_count + 1):
-
-            genesis_accounts = self.substrate.get_runtime_state(
-                module="Indices",
-                storage_function="EnumSet",
-                params=[enum_set_nr],
-                block_hash=block.hash
+            rpc_result = self.substrate.rpc_request(
+                'state_getKeys',
+                [storage_key_prefix, block.hash]
             ).get('result')
+            # Extract accounts from storage key
+            genesis_accounts = [storage_key[-64:] for storage_key in rpc_result if len(storage_key) == 162]
 
-            if genesis_accounts:
-                block.count_accounts_new += len(genesis_accounts)
-                block.count_accounts += len(genesis_accounts)
+            for account_id in genesis_accounts:
+                account_audit = AccountAudit(
+                    account_id=account_id,
+                    block_id=block.id,
+                    extrinsic_idx=None,
+                    event_idx=None,
+                    type_id=settings.ACCOUNT_AUDIT_TYPE_NEW
+                )
 
-                for idx, account_id in enumerate(genesis_accounts):
-                    account_audit = AccountAudit(
-                        account_id=account_id.replace('0x', ''),
-                        block_id=block.id,
-                        extrinsic_idx=None,
-                        event_idx=None,
-                        type_id=ACCOUNT_AUDIT_TYPE_NEW
-                    )
+                account_audit.save(self.db_session)
 
-                    account_audit.save(self.db_session)
+        elif settings.get_versioned_setting('SUBSTRATE_STORAGE_INDICES', block.spec_version_id) == 'EnumSet':
 
-                    account_index_id = enum_set_nr * 64 + idx
+            genesis_account_page_count = self.substrate.get_runtime_state(
+                module="Indices",
+                storage_function="NextEnumSet",
+                block_hash=block.hash
+            ).get('result', 0)
 
-                    account_index_audit = AccountIndexAudit(
-                        account_index_id=account_index_id,
-                        account_id=account_id.replace('0x', ''),
-                        block_id=block.id,
-                        extrinsic_idx=None,
-                        event_idx=None,
-                        type_id=ACCOUNT_INDEX_AUDIT_TYPE_NEW
-                    )
+            # Get Accounts on EnumSet
+            block.count_accounts_new = 0
+            block.count_accounts = 0
 
-                    account_index_audit.save(self.db_session)
+            for enum_set_nr in range(0, genesis_account_page_count + 1):
+
+                genesis_accounts = self.substrate.get_runtime_state(
+                    module="Indices",
+                    storage_function="EnumSet",
+                    params=[enum_set_nr],
+                    block_hash=block.hash
+                ).get('result')
+
+                if genesis_accounts:
+                    block.count_accounts_new += len(genesis_accounts)
+                    block.count_accounts += len(genesis_accounts)
+
+                    for idx, account_id in enumerate(genesis_accounts):
+                        account_audit = AccountAudit(
+                            account_id=account_id.replace('0x', ''),
+                            block_id=block.id,
+                            extrinsic_idx=None,
+                            event_idx=None,
+                            type_id=settings.ACCOUNT_AUDIT_TYPE_NEW
+                        )
+
+                        account_audit.save(self.db_session)
+
+                        account_index_id = enum_set_nr * 64 + idx
+
+                        account_index_audit = AccountIndexAudit(
+                            account_index_id=account_index_id,
+                            account_id=account_id.replace('0x', ''),
+                            block_id=block.id,
+                            extrinsic_idx=None,
+                            event_idx=None,
+                            type_id=settings.ACCOUNT_INDEX_AUDIT_TYPE_NEW
+                        )
+
+                        account_index_audit.save(self.db_session)
 
         block.save(self.db_session)
 
+        # Add hardcoded account like treasury stored in settings
+        for account_id in settings.SUBSTRATE_TREASURY_ACCOUNTS:
+            account_audit = AccountAudit(
+                account_id=account_id,
+                block_id=block.id,
+                extrinsic_idx=None,
+                event_idx=None,
+                data={'is_treasury': True},
+                type_id=settings.ACCOUNT_AUDIT_TYPE_NEW
+            )
+
+            account_audit.save(self.db_session)
+
+        # Check for sudo accounts
+        try:
+            # Update sudo key
+            sudo_key = self.substrate.get_runtime_state(
+                module='Sudo',
+                storage_function='Key',
+                block_hash=block.hash
+            ).get('result')
+
+            account_audit = AccountAudit(
+                account_id=sudo_key.replace('0x', ''),
+                block_id=block.id,
+                extrinsic_idx=None,
+                event_idx=None,
+                data={'is_sudo': True},
+                type_id=settings.ACCOUNT_AUDIT_TYPE_NEW
+            )
+
+            account_audit.save(self.db_session)
+        except ValueError:
+            pass
+
         # Create initial session
-        initial_session_event = NewSessionEventProcessor(block, Event(), None)
-        initial_session_event.add_session(db_session=self.db_session, session_id=0)
+        initial_session_event = NewSessionEventProcessor(
+            block=block, event=Event(), substrate=self.substrate
+        )
+
+        if settings.get_versioned_setting('NEW_SESSION_EVENT_HANDLER', block.spec_version_id):
+            initial_session_event.add_session(db_session=self.db_session, session_id=0)
+        else:
+            initial_session_event.add_session_old(db_session=self.db_session, session_id=0)
 
     def process_metadata(self, spec_version, block_hash):
 
@@ -283,6 +358,7 @@ class PolkascanHarvesterService(BaseService):
                                     default=storage.fallback,
                                     modifier=storage.modifier,
                                     type_hasher=type_hasher,
+                                    storage_key=xxh128(module.prefix.encode()) + xxh128(storage.name.encode()),
                                     type_key1=type_key1,
                                     type_key2=type_key2,
                                     type_value=type_value,
@@ -362,8 +438,8 @@ class PolkascanHarvesterService(BaseService):
         if Block.query(self.db_session).filter_by(hash=block_hash).count() > 0:
             raise BlockAlreadyAdded(block_hash)
 
-        if SUBSTRATE_MOCK_EXTRINSICS:
-            self.substrate.mock_extrinsics = SUBSTRATE_MOCK_EXTRINSICS
+        if settings.SUBSTRATE_MOCK_EXTRINSICS:
+            self.substrate.mock_extrinsics = settings.SUBSTRATE_MOCK_EXTRINSICS
 
         json_block = self.substrate.get_chain_block(block_hash)
 
@@ -516,13 +592,6 @@ class PolkascanHarvesterService(BaseService):
             # Lookup result of extrinsic
             extrinsic_success = extrinsic_success_idx.get(extrinsic_idx, False)
 
-            if extrinsic_data['call_module'] == 'timestamp':
-                value = extrinsic_data['params'][0].get('value')
-                utc = dateutil.parser.parse(value).utcnow()
-                time = utc.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai'))
-
-                extrinsic_data['params'][0]['value'] = time.strftime('%Y-%m-%dT%H-%M-%S')
-
             model = Extrinsic(
                 block_id=block_id,
                 extrinsic_idx=extrinsic_idx,
@@ -564,13 +633,23 @@ class PolkascanHarvesterService(BaseService):
                 if model.signedby_index:
                     block.count_extrinsics_signedby_index += 1
 
+                # Add search index for signed extrinsics
+                search_index = SearchIndex(
+                    index_type_id=settings.SEARCH_INDEX_SIGNED_EXTRINSIC,
+                    block_id=block.id,
+                    extrinsic_idx=model.extrinsic_idx,
+                    account_id=model.address
+                )
+                search_index.save(self.db_session)
+
             else:
                 block.count_extrinsics_unsigned += 1
 
             # Process extrinsic processors
             for processor_class in ProcessorRegistry().get_extrinsic_processors(model.module_id, model.call_id):
-                extrinsic_processor = processor_class(block, model)
+                extrinsic_processor = processor_class(block, model, substrate=self.substrate)
                 extrinsic_processor.accumulation_hook(self.db_session)
+                extrinsic_processor.process_search_index(self.db_session)
 
         # Process event processors
         for event in events:
@@ -583,17 +662,18 @@ class PolkascanHarvesterService(BaseService):
 
             for processor_class in ProcessorRegistry().get_event_processors(event.module_id, event.event_id):
                 event_processor = processor_class(block, event, extrinsic,
-                                                  metadata=self.metadata_store.get(block.spec_version_id))
+                                                  metadata=self.metadata_store.get(block.spec_version_id),
+                                                  substrate=self.substrate)
                 event_processor.accumulation_hook(self.db_session)
                 event_processor.process_search_index(self.db_session)
 
         # Process block processors
         for processor_class in ProcessorRegistry().get_block_processors():
-            block_processor = processor_class(block)
+            block_processor = processor_class(block, substrate=self.substrate, harvester=self)
             block_processor.accumulation_hook(self.db_session)
 
         # Debug info
-        if DEBUG:
+        if settings.DEBUG:
             block.debug_info = json_block
 
         # ==== Save data block ==================================
@@ -641,19 +721,19 @@ class PolkascanHarvesterService(BaseService):
 
         # Process block processors
         for processor_class in ProcessorRegistry().get_block_processors():
-            block_processor = processor_class(block, sequenced_block)
+            block_processor = processor_class(block, sequenced_block, substrate=self.substrate)
             block_processor.sequencing_hook(
                 self.db_session,
                 parent_block_data,
                 parent_sequenced_block_data
             )
 
-        extrinsics = Extrinsic.query(self.db_session).filter_by(block_id=block.id)
+        extrinsics = Extrinsic.query(self.db_session).filter_by(block_id=block.id).order_by('extrinsic_idx')
 
         for extrinsic in extrinsics:
             # Process extrinsic processors
             for processor_class in ProcessorRegistry().get_extrinsic_processors(extrinsic.module_id, extrinsic.call_id):
-                extrinsic_processor = processor_class(block, extrinsic)
+                extrinsic_processor = processor_class(block, extrinsic, substrate=self.substrate)
                 extrinsic_processor.sequencing_hook(
                     self.db_session,
                     parent_block_data,
@@ -672,7 +752,7 @@ class PolkascanHarvesterService(BaseService):
                     extrinsic = None
 
             for processor_class in ProcessorRegistry().get_event_processors(event.module_id, event.event_id):
-                event_processor = processor_class(block, event, extrinsic)
+                event_processor = processor_class(block, event, extrinsic, substrate=self.substrate)
                 event_processor.sequencing_hook(
                     self.db_session,
                     parent_block_data,
@@ -686,12 +766,12 @@ class PolkascanHarvesterService(BaseService):
     def integrity_checks(self):
 
         # 1. Check finalized head
-        substrate = SubstrateInterface(url = SUBSTRATE_RPC_URL, address_type = SUBSTRATE_ADDRESS_TYPE, type_registry_preset = TYPE_REGISTRY)
+        substrate = SubstrateInterface(settings.SUBSTRATE_RPC_URL)
 
-        if FINALIZATION_BY_BLOCK_CONFIRMATIONS > 0:
+        if settings.FINALIZATION_BY_BLOCK_CONFIRMATIONS > 0:
             finalized_block_hash = substrate.get_chain_head()
             finalized_block_number = max(
-                substrate.get_block_number(finalized_block_hash) - FINALIZATION_BY_BLOCK_CONFIRMATIONS, 0
+                substrate.get_block_number(finalized_block_hash) - settings.FINALIZATION_BY_BLOCK_CONFIRMATIONS, 0
             )
         else:
             finalized_block_hash = substrate.get_chain_finalised_head()
@@ -859,22 +939,165 @@ class PolkascanHarvesterService(BaseService):
                 model = ReorgLog(block_hash=block.hash, **log.asdict())
                 model.save(self.db_session)
 
-    def rebuild_search_index(self, search_index_type_id):
+    def rebuild_search_index(self):
 
-        if search_index_type_id == SEARCH_INDEX_SLASHED_ACCOUNT:
+        self.db_session.execute('truncate table {}'.format(SearchIndex.__tablename__))
 
-            for event in Event.query(self.db_session).filter_by(module_id='staking', event_id='Slash'):
-                processor = SlashEventProcessor(block=event.block, event=event)
-                processor.process_search_index(self.db_session)
+        for block in Block.query(self.db_session).order_by('id').yield_per(1000):
+
+            extrinsic_lookup = {}
+            block._accounts_new = []
+            block._accounts_reaped = []
+
+            for extrinsic in Extrinsic.query(self.db_session).filter_by(block_id=block.id).order_by('extrinsic_idx'):
+                extrinsic_lookup[extrinsic.extrinsic_idx] = extrinsic
+
+                # Add search index for signed extrinsics
+                if extrinsic.address:
+                    search_index = SearchIndex(
+                        index_type_id=settings.SEARCH_INDEX_SIGNED_EXTRINSIC,
+                        block_id=block.id,
+                        extrinsic_idx=extrinsic.extrinsic_idx,
+                        account_id=extrinsic.address
+                    )
+                    search_index.save(self.db_session)
+
+                # Process extrinsic processors
+                for processor_class in ProcessorRegistry().get_extrinsic_processors(extrinsic.module_id, extrinsic.call_id):
+                    extrinsic_processor = processor_class(block=block, extrinsic=extrinsic, substrate=self.substrate)
+                    extrinsic_processor.process_search_index(self.db_session)
+
+            for event in Event.query(self.db_session).filter_by(block_id=block.id).order_by('event_idx'):
+                extrinsic = None
+                if event.extrinsic_idx is not None:
+                    try:
+                        extrinsic = extrinsic_lookup[event.extrinsic_idx]
+                    except (IndexError, KeyError):
+                        extrinsic = None
+
+                for processor_class in ProcessorRegistry().get_event_processors(event.module_id, event.event_id):
+                    event_processor = processor_class(block, event, extrinsic,
+                                                      metadata=self.metadata_store.get(block.spec_version_id),
+                                                      substrate=self.substrate)
+                    event_processor.process_search_index(self.db_session)
 
             self.db_session.commit()
-        elif search_index_type_id == SEARCH_INDEX_BALANCETRANSFER:
 
-            for event in Event.query(self.db_session).filter_by(module_id='balances', event_id='Transfer'):
-                processor = BalancesTransferProcessor(block=event.block, event=event)
-                processor.process_search_index(self.db_session)
+    def create_full_balance_snaphot(self, block_id):
 
-            self.db_session.commit()
-        else:
-            raise NotImplementedError('Not supported search index {}'.format(search_index_type_id))
+        block_hash = self.substrate.get_block_hash(block_id)
+
+        # Determine if keys have Blake2_128Concat format so AccountId is stored in storage key
+        storage_method = self.substrate.get_metadata_storage_function(
+            module_name="System",
+            storage_name="Account",
+            block_hash=block_hash
+        )
+
+        if storage_method:
+            if storage_method.get("type_hasher_key1") == "Blake2_128Concat":
+
+                # get balances storage prefix
+                storage_key_prefix = self.substrate.generate_storage_hash(
+                    storage_module='System',
+                    storage_function='Account',
+                    metadata_version=settings.SUBSTRATE_METADATA_VERSION
+                )
+
+                rpc_result = self.substrate.rpc_request(
+                    'state_getKeys',
+                    [storage_key_prefix, block_hash]
+                ).get('result')
+                # Extract accounts from storage key
+                accounts = [storage_key[-64:] for storage_key in rpc_result if len(storage_key) == 162]
+            else:
+                # Retrieve accounts from database for legacy blocks
+                accounts = [account[0] for account in self.db_session.query(distinct(Account.id))]
+
+            for account_id in accounts:
+
+                self.create_balance_snapshot(block_id=block_id, account_id=account_id, block_hash=block_hash)
+
+    def create_balance_snapshot(self, block_id, account_id, block_hash=None):
+
+        if not block_hash:
+            block_hash = self.substrate.get_block_hash(block_id)
+
+        # Get balance for account
+        try:
+            account_info_data = self.substrate.get_runtime_state(
+                module='System',
+                storage_function='Account',
+                params=['0x{}'.format(account_id)],
+                block_hash=block_hash
+            ).get('result')
+
+            # Make sure no rows inserted before processing this record
+            AccountInfoSnapshot.query(self.db_session).filter_by(block_id=block_id, account_id=account_id).delete()
+
+            if account_info_data:
+                account_info_obj = AccountInfoSnapshot(
+                    block_id=block_id,
+                    account_id=account_id,
+                    account_info=account_info_data,
+                    balance_free=account_info_data["data"]["free"],
+                    balance_reserved=account_info_data["data"]["reserved"],
+                    balance_total=account_info_data["data"]["free"] + account_info_data["data"]["reserved"],
+                    nonce=account_info_data["nonce"]
+                )
+            else:
+                account_info_obj = AccountInfoSnapshot(
+                    block_id=block_id,
+                    account_id=account_id,
+                    account_info=None,
+                    balance_free=None,
+                    balance_reserved=None,
+                    balance_total=None,
+                    nonce=None
+                )
+
+            account_info_obj.save(self.db_session)
+        except ValueError:
+            pass
+
+    def update_account_balances(self):
+        # set balances according to most recent snapshot
+        account_info = self.db_session.execute("""
+                        select
+                           a.account_id, 
+                           a.balance_total,
+                           a.balance_free,
+                           a.balance_reserved,
+                           a.nonce
+                    from
+                         data_account_info_snapshot as a
+                    inner join (
+                        select 
+                            account_id, max(block_id) as max_block_id 
+                        from data_account_info_snapshot 
+                        group by account_id
+                    ) as b
+                    on a.account_id = b.account_id and a.block_id = b.max_block_id
+                    """)
+
+        for account_id, balance_total, balance_free, balance_reserved, nonce in account_info:
+            Account.query(self.db_session).filter_by(id=account_id).update(
+                {
+                    Account.balance_total: balance_total,
+                    Account.balance_free: balance_free,
+                    Account.balance_reserved: balance_reserved,
+                    Account.nonce: nonce,
+                }, synchronize_session='fetch'
+            )
+
+
+
+
+
+
+
+
+
+
+
 

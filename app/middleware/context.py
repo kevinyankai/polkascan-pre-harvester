@@ -28,7 +28,6 @@ def set_context(req, resp):
     resp.set_header('request-id', req.context['request_id'])
     resp.set_header('Access-Control-Allow-Origin', '*')
     resp.set_header('Access-Control-Allow-Headers', '*')
-    resp.set_header("Cache-Control", "no-cache")
 
 
 class ContextMiddleware(object):

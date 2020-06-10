@@ -28,6 +28,7 @@ from scalecodec import U8
 from scalecodec.exceptions import RemainingScaleBytesNotEmptyException
 from sqlalchemy import and_
 
+from app.processors.converters import PolkascanHarvesterService
 from app.models.data import Block, Session, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent
 from app.resources.base import BaseResource
 
@@ -38,6 +39,7 @@ from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61
 from substrateinterface import SubstrateInterface
 from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
 from app.utils.ss58 import ss58_encode
+from app.tasks import balance_snapshot
 
 
 class ExtractMetadataResource(BaseResource):
@@ -45,8 +47,7 @@ class ExtractMetadataResource(BaseResource):
     def on_get(self, req, resp):
 
         if 'block_hash' in req.params:
-            substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
-                                           type_registry_preset=TYPE_REGISTRY)
+            substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
             metadata = substrate.get_block_metadata(req.params.get('block_hash'))
 
             resp.status = falcon.HTTP_200
@@ -65,8 +66,7 @@ class ExtractExtrinsicsResource(BaseResource):
 
     def on_get(self, req, resp):
 
-        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
-                                       type_registry_preset=TYPE_REGISTRY)
+        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         # Get extrinsics
         json_block = substrate.get_chain_block(req.params.get('block_hash'))
@@ -80,7 +80,7 @@ class ExtractExtrinsicsResource(BaseResource):
             # Get metadata
             metadata_decoder = substrate.get_block_metadata(json_block['block']['header']['parentHash'])
 
-            # result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
+            #result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
             result = []
 
             for extrinsic in extrinsics:
@@ -97,8 +97,8 @@ class ExtractExtrinsicsResource(BaseResource):
 class ExtractEventsResource(BaseResource):
 
     def on_get(self, req, resp):
-        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
-                                       type_registry_preset=TYPE_REGISTRY)
+
+        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         # Get Parent hash
         json_block = substrate.get_block_header(req.params.get('block_hash'))
@@ -110,8 +110,7 @@ class ExtractEventsResource(BaseResource):
         events_decoder = substrate.get_block_events(req.params.get('block_hash'), metadata_decoder=metadata_decoder)
 
         resp.status = falcon.HTTP_201
-        resp.media = {'events': events_decoder.value,
-                      'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
+        resp.media = {'events': events_decoder.value, 'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
 
 
 class HealthCheckResource(BaseResource):
@@ -122,8 +121,8 @@ class HealthCheckResource(BaseResource):
 class StorageValidatorResource(BaseResource):
 
     def on_get(self, req, resp):
-        substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
-                                       type_registry_preset=TYPE_REGISTRY)
+
+        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         resp.status = falcon.HTTP_200
 
@@ -154,6 +153,21 @@ class StorageValidatorResource(BaseResource):
         #         nominators.append(obj.decode())
 
         resp.media = {'validators': validators, 'current_era': current_era}
+
+
+class CreateSnapshotResource(BaseResource):
+
+    def on_post(self, req, resp):
+
+        task = balance_snapshot.delay(
+            account_id=req.media.get('account_id'),
+            block_start=req.media.get('block_start'),
+            block_end=req.media.get('block_end'),
+            block_ids=req.media.get('block_ids')
+        )
+
+        resp.media = {'result': 'Balance snapshop task started', 'task_id': task.id}
+
 
 
 # 获取Metadata
