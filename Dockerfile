@@ -1,5 +1,5 @@
 # base image
-FROM python:3.6-buster
+FROM python:3.8-buster
 ENV PYTHONUNBUFFERED 1
 
 # set working directory
@@ -10,8 +10,6 @@ RUN pip3 install --upgrade pip
 
 # add requirements
 COPY ./requirements.txt /usr/src/app/requirements.txt
-
-ENV TZ=Asia/Shangha
 
 # install requirements
 RUN pip3 install -r requirements.txt
