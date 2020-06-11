@@ -90,9 +90,9 @@ class Block(BaseModel):
 
     @classmethod
     def get_head(cls, session):
-        with session.begin():
-            query = session.query(cls)
-            model = query.order_by(cls.id.desc()).first()
+        # with session.begin():
+        query = session.query(cls)
+        model = query.order_by(cls.id.desc()).first()
 
         return model
 
