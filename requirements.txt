@@ -5,7 +5,7 @@ attrs==19.1.0
 Babel==2.6.0
 base58==1.0.3
 billiard==3.5.0.5
-celery==4.3.0
+celery==4.4.5
 certifi==2019.6.16
 chardet==3.0.4
 dictalchemy==0.1.2.7
@@ -15,7 +15,7 @@ greenlet==0.4.15
 gunicorn==19.9.0
 idna==2.8
 jsonschema==2.6.0
-kombu==4.2.2.post1
+kombu==4.6.10
 Mako==1.0.8
 MarkupSafe==1.1.1
 meinheld==1.0.1
