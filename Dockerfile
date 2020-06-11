@@ -14,5 +14,10 @@ COPY ./requirements.txt /usr/src/app/requirements.txt
 # install requirements
 RUN pip3 install -r requirements.txt
 
+# Set timezone
+ENV TZ=Asia/Shanghai
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN dpkg-reconfigure -f noninteractive tzdata
+
 # add app
 COPY . /usr/src/app
