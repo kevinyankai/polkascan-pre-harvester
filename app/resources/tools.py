@@ -274,9 +274,9 @@ class GetBlockInfoByKeyResource(BaseResource):
         if blockHash:
             resp.status = falcon.HTTP_200
             block = Block.query(self.session).filter(Block.hash == blockHash).first()
-            blockInfo = {}
 
             if block:
+                blockInfo = {}
                 blockInfo["timestamp"] = block.datetime.strftime("%Y-%m-%d %H:%M:%S")
                 blockInfo["block_hash"]= block.hash
                 blockInfo["block_id"] = block.id
@@ -331,15 +331,15 @@ class GetBlockInfoByKeyResource(BaseResource):
                     "hash": self.getEventHash(block.id, event.extrinsic_idx)
                 } for event in events]
 
-            resp.media = {
-                'status': 'success',
-                'data': {
-                    "block_info": blockInfo,
-                    "extrinsics": extrinsicsObj,
-                    "logs": logsObj,
-                    "events": eventObj
+                resp.media = {
+                    'status': 'success',
+                    'data': {
+                        "block_info": blockInfo,
+                        "extrinsics": extrinsicsObj,
+                        "logs": logsObj,
+                        "events": eventObj
+                    }
                 }
-            }
         else:
             resp.status = falcon.HTTP_404
             resp.media = {'result': 'Block not found'}

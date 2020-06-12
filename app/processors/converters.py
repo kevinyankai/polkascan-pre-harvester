@@ -594,14 +594,14 @@ class PolkascanHarvesterService(BaseService):
 
             # Lookup result of extrinsic
             extrinsic_success = extrinsic_success_idx.get(extrinsic_idx, False)
-            #BEGIN: added by yankai 解决入库时间时区问题
+            #BEGIN: added by yankai 瑙ｅ喅鍏ュ簱鏃堕棿鏃跺尯闂
             if extrinsic_data['call_module'] == 'timestamp':
                 value = extrinsic_data['params'][0].get('value')
                 utc = dateutil.parser.parse(value).utcnow()
                 time = utc.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai'))
 
                 extrinsic_data['params'][0]['value'] = time.strftime('%Y-%m-%dT%H-%M-%S')
-            # END: added by yankai 解决入库时间时区问题
+            # END: added by yankai 瑙ｅ喅鍏ュ簱鏃堕棿鏃跺尯闂
 
             model = Extrinsic(
                 block_id=block_id,

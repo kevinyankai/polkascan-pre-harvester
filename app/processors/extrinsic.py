@@ -38,12 +38,12 @@ class TimestampExtrinsicProcessor(ExtrinsicProcessor):
             # Store block date time related fields
             for param in self.extrinsic.params:
                 if param.get('name') == 'now':
-                    # BEGIN: modified by yankai ĞŞ¸ÄĞ´ÈëÊı¾İ¿âÊ±¼äÊ±ÇøÎÊÌâ
+                    # BEGIN: modified by yankai ä¿®æ”¹å†™å…¥æ•°æ®åº“æ—¶é—´æ—¶åŒºé—®é¢˜
                     #self.block.set_datetime(dateutil.parser.parse(param.get('value')).replace(tzinfo=pytz.UTC))
                     utc = dateutil.parser.parse(param.get('value')).utcnow()
                     tzchina = utc.replace(tzinfo=pytz.utc).astimezone(pytz.timezone('Asia/Shanghai'))
                     self.block.set_datetime(tzchina)
-                    # END: modified by yankai ĞŞ¸ÄĞ´ÈëÊı¾İ¿âÊ±¼äÊ±ÇøÎÊÌâ
+                    # END: modified by yankai ä¿®æ”¹å†™å…¥æ•°æ®åº“æ—¶é—´æ—¶åŒºé—®é¢˜
 
 
 class DemocracyVoteExtrinsicProcessor(ExtrinsicProcessor):
