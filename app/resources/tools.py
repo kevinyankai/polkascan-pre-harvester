@@ -367,6 +367,7 @@ class LatestTransfersResource(BaseResource):
             fromAddr = ss58_encode(extrinsic.address.replace('0x', ''))
             hash = "0x{}".format(extrinsic.extrinsic_hash)
             timestamp = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S")
+            #print(extrinsic);
             # timestamp = time.mktime(extrinsic.datetime.timetuple())
 
             params = json.loads(extrinsic.params)
