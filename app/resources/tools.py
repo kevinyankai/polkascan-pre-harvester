@@ -435,3 +435,22 @@ class LatestTransfersResource(BaseResource):
         #     'address': accountAddress,
         #     'time': times.strftime("%Y%m%d%H")
         # }
+# 查询最近的转账交易
+class BlockMetadataInfo(BaseResource):
+    def on_post(self, req, resp):
+        blockHash = None
+        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        if req.media.get('block_id'):
+            blockHash = substrate.get_block_hash(req.media.get('block_id'))
+        elif req.media.get('block_hash'):
+            blockHash = req.media.get('block_hash')
+        else:
+            resp.status = falcon.HTTP_BAD_REQUEST
+            resp.media = {'errors': ['Either blockHash or block_id should be supplied']}
+
+        metadata = substrate.get_block_metadata(blockHash)
+
+        resp.media = {
+            'status': 'success',
+            'data': metadata
+        }
