@@ -36,7 +36,7 @@ from scalecodec.base import ScaleBytes
 from scalecodec.metadata import MetadataDecoder
 from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
 
-from substrateinterface import SubstrateInterface
+from substrateinterface import SubstrateInterface, StorageFunctionNotFound
 from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
 from app.utils.ss58 import ss58_encode
 from app.tasks import balance_snapshot
@@ -192,15 +192,14 @@ class MetadataResource(BaseResource):
 
         if storage_call:
             try:
-                validators = substrate.get_storage(
-                    block_hash=head.hash,
+                validators = substrate.get_runtime_state(
                     module="Session",
-                    function="Validators",
-                    return_scale_type=storage_call.get_return_type(),
-                    metadata_version=SUBSTRATE_METADATA_VERSION
-                ) or []
-            except RemainingScaleBytesNotEmptyException:
-                pass
+                    storage_function="Validators",
+                    params=[],
+                    block_hash=head_hash
+                ).get('result', [])
+            except StorageFunctionNotFound:
+                validators = []
 
         storage_call = RuntimeStorage.query(self.session).filter_by(
             module_id='staking',
@@ -210,15 +209,14 @@ class MetadataResource(BaseResource):
 
         if storage_call:
             try:
-                validator_count = substrate.get_storage(
-                    block_hash=head.hash,
+                validator_count = substrate.get_runtime_state(
                     module="Staking",
-                    function="ValidatorCount",
-                    return_scale_type=storage_call.get_return_type(),
-                    metadata_version=SUBSTRATE_METADATA_VERSION
-                ) or []
-            except RemainingScaleBytesNotEmptyException:
-                pass
+                    storage_function="ValidatorCount",
+                    params=[],
+                    block_hash=head_hash
+                ).get('result', 0)
+            except StorageFunctionNotFound:
+                validator_count = 0
 
         transfers_count = Extrinsic.query(self.session).filter(
             and_(Extrinsic.module_id == 'balances', Extrinsic.call_id == 'transfer')).count()
@@ -435,6 +433,7 @@ class LatestTransfersResource(BaseResource):
         #     'address': accountAddress,
         #     'time': times.strftime("%Y%m%d%H")
         # }
+
 # 查询最近的转账交易
 class BlockMetadataInfo(BaseResource):
     def on_post(self, req, resp):
