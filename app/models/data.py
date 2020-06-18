@@ -115,6 +115,23 @@ class Block(BaseModel):
                                             """)
                                )
 
+    @classmethod
+    def latest_blocks(cls, session, page, pageSize):
+        return session.execute(text("""
+                                            SELECT 
+                                                b.id, b.hash, b.count_events, b.count_extrinsics, b.datetime, t.author 
+                                            FROM 
+                                                data_block b 
+                                            LEFT JOIN 
+                                                data_block_total t 
+                                            ON 
+                                                b.id = t.id
+                                            ORDER BY 
+                                                b.id DESC 
+                                            LIMIT
+                                                :page, :page_size
+                                         """), {"page": (page - 1) * pageSize, "page_size": pageSize}
+                               )
 
 class BlockTotal(BaseModel):
     __tablename__ = 'data_block_total'
@@ -216,7 +233,7 @@ class Extrinsic(BaseModel):
         return '{}-{}'.format(self.block_id, self.extrinsic_idx)
 
     @classmethod
-    def latest_extrinsics(cls, session):
+    def latest_extrinsics(cls, session, page, pageSize):
         return session.execute(text("""
                                         SELECT 
                                             e.address, e.extrinsic_hash, e.params, b.datetime 
@@ -231,10 +248,27 @@ class Extrinsic(BaseModel):
                                         ORDER BY 
                                             e.block_id DESC 
                                         LIMIT 
-                                            20
-                                     """)
+                                            :page, :page_size 
+                                     """), {"page": (page - 1) * pageSize, "page_size": pageSize}
                                )
 
+    @classmethod
+    def all_extrinsics(cls, session, page, pageSize):
+        return session.execute(text("""
+                                        SELECT 
+                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.signed, e.module_id, e.call_id, e.params, e.success, b.datetime  
+                                        FROM 
+                                            data_extrinsic e 
+                                        LEFT JOIN 
+                                            data_block b 
+                                        ON 
+                                            e.block_id = b.id 
+                                        ORDER BY 
+                                            e.block_id DESC 
+                                        LIMIT
+                                            :page, :page_size 
+                                    """), {"page": (page - 1) * pageSize, "page_size": pageSize}
+                               )
 
 class Log(BaseModel):
     __tablename__ = 'data_log'

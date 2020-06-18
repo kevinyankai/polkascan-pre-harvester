@@ -34,7 +34,7 @@ from app.resources.harvester import PolkascanStartHarvesterResource, PolkascanSt
     RebuildSearchIndexResource, ProcessGenesisBlockResource, PolkascanHarvesterQueueResource, RebuildAccountInfoResource
 from app.resources.tools import ExtractMetadataResource, ExtractExtrinsicsResource, MetadataResource, \
     HealthCheckResource, ExtractEventsResource, LatestBlocksResource, LatestTransfersResource, \
-    GetBlockInfoByKeyResource, CreateSnapshotResource, BlockMetadataInfo
+    GetBlockInfoByKeyResource, CreateSnapshotResource, BlockMetadataInfo, AllExtrinsicsResource
 
 # Database connection
 engine = create_engine(DB_CONNECTION, echo=DEBUG, isolation_level="READ_UNCOMMITTED")
@@ -69,3 +69,4 @@ app.add_route('/latest-blocks', LatestBlocksResource())
 app.add_route('/latest-transfers', LatestTransfersResource())
 app.add_route('/block-info', GetBlockInfoByKeyResource())
 app.add_route('/block-metadata', BlockMetadataInfo())
+app.add_route('/extrinsics', AllExtrinsicsResource())

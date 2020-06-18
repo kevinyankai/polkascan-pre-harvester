@@ -19,27 +19,19 @@
 #  tools.py
 import json
 import time
-from datetime import datetime
 
-import dateutil
 import falcon
-import pytz
-from scalecodec import U8
-from scalecodec.exceptions import RemainingScaleBytesNotEmptyException
-from sqlalchemy import and_
-
-from app.processors.converters import PolkascanHarvesterService
-from app.models.data import Block, Session, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent
-from app.resources.base import BaseResource
-
 from scalecodec.base import ScaleBytes
+from scalecodec.block import ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
 from scalecodec.metadata import MetadataDecoder
-from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
-
+from sqlalchemy import and_
 from substrateinterface import SubstrateInterface, StorageFunctionNotFound
+
+from app.models.data import Block, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent, BlockTotal
+from app.resources.base import BaseResource
 from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
-from app.utils.ss58 import ss58_encode
 from app.tasks import balance_snapshot
+from app.utils.ss58 import ss58_encode
 
 
 class ExtractMetadataResource(BaseResource):
@@ -80,7 +72,7 @@ class ExtractExtrinsicsResource(BaseResource):
             # Get metadata
             metadata_decoder = substrate.get_block_metadata(json_block['block']['header']['parentHash'])
 
-            #result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
+            # result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
             result = []
 
             for extrinsic in extrinsics:
@@ -97,7 +89,6 @@ class ExtractExtrinsicsResource(BaseResource):
 class ExtractEventsResource(BaseResource):
 
     def on_get(self, req, resp):
-
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         # Get Parent hash
@@ -110,7 +101,8 @@ class ExtractEventsResource(BaseResource):
         events_decoder = substrate.get_block_events(req.params.get('block_hash'), metadata_decoder=metadata_decoder)
 
         resp.status = falcon.HTTP_201
-        resp.media = {'events': events_decoder.value, 'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
+        resp.media = {'events': events_decoder.value,
+                      'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
 
 
 class HealthCheckResource(BaseResource):
@@ -121,7 +113,6 @@ class HealthCheckResource(BaseResource):
 class StorageValidatorResource(BaseResource):
 
     def on_get(self, req, resp):
-
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         resp.status = falcon.HTTP_200
@@ -158,7 +149,6 @@ class StorageValidatorResource(BaseResource):
 class CreateSnapshotResource(BaseResource):
 
     def on_post(self, req, resp):
-
         task = balance_snapshot.delay(
             account_id=req.media.get('account_id'),
             block_start=req.media.get('block_start'),
@@ -167,7 +157,6 @@ class CreateSnapshotResource(BaseResource):
         )
 
         resp.media = {'result': 'Balance snapshop task started', 'task_id': task.id}
-
 
 
 # 获取Metadata
@@ -237,21 +226,27 @@ class MetadataResource(BaseResource):
 # 获取最新区块列表，取20个
 class LatestBlocksResource(BaseResource):
     def on_get(self, req, resp):
-        blocks = Block.query(self.session).order_by(Block.id.desc()).limit(20).all();
+        page = int(req.params.get('page') if req.params.get('page') else 1)
+        pageSize = int(req.params.get('page_size') if req.params.get('page_size') else 20)
 
+        # blocks = Block.query(self.session).order_by(Block.id.desc()).limit(pageSize).offset((page - 1) * pageSize).all()
+        blocks = Block.latest_blocks(self.session, page, pageSize)
         resp.status = falcon.HTTP_200
         result = [{
             "block_num": blockData.id,
             "event_count": blockData.count_events,
             "extrinsics_count": blockData.count_extrinsics,
             "block_timestamp": blockData.datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "block_hash": blockData.hash,
+            "author": ss58_encode(blockData.author.replace('0x', '')) if blockData.author is not None else None,
             # "block_timestamp": time.mktime(blockData.datetime.timetuple()),
-            # "finalized": "1"
+            "finalized": "1" if blockData.author is not None else None,
         } for blockData in blocks]
 
+        count = Block.query(self.session).count()
         resp.media = {
             'status': 'success',
-            'data': result
+            'data': {'result': result, 'count': count}
         }
 
 
@@ -272,36 +267,40 @@ class GetBlockInfoByKeyResource(BaseResource):
         if blockHash:
             resp.status = falcon.HTTP_200
             block = Block.query(self.session).filter(Block.hash == blockHash).first()
+            blockTotal = BlockTotal.query(self.session).filter(BlockTotal.id == block.id).first()
+            author = ss58_encode(blockTotal.author.replace('0x', '')) if blockTotal is not None else None
 
             if block:
                 blockInfo = {}
                 blockInfo["timestamp"] = block.datetime.strftime("%Y-%m-%d %H:%M:%S")
-                blockInfo["block_hash"]= block.hash
+                blockInfo["block_hash"] = block.hash
                 blockInfo["block_id"] = block.id
                 blockInfo["parent_id"] = block.id - 1 if block.id > 0 else 0
                 blockInfo["child_id"] = block.id + 1
                 blockInfo["parent_hash"] = block.parent_hash
                 blockInfo["state_root"] = block.state_root
                 blockInfo["extrinsic_root"] = block.extrinsics_root
-                blockInfo["validator"] = "validator"  # TODO 获取验证人信息
+                blockInfo["validator"] = author
                 blockInfo["count_extrinsic"] = block.count_extrinsics
                 blockInfo["count_event"] = block.count_events
                 blockInfo["count_log"] = block.count_log
-                blockInfo["age"] = time.mktime(block.datetime.timetuple())
+                # blockInfo["age"] = time.mktime(block.datetime.timetuple())
+                blockInfo["age"] = block.datetime.strftime("%Y-%m-%d %H:%M:%S")
 
                 # 获取和区块相关的交易信息
                 extrinsics = Extrinsic.query(self.session).filter(Extrinsic.block_id == block.id).all()
                 extrinsicsObj = [{
                     "extrinsic_id": '{}-{}'.format(block.id, extrinsic.extrinsic_idx),
                     "hash": extrinsic.extrinsic_hash if extrinsic.extrinsic_hash else None,
-                    "age": time.mktime(block.datetime.timetuple()),
+                    # "age": time.mktime(block.datetime.timetuple()),
+                    "age": block.datetime.strftime("%Y-%m-%d %H:%M:%S"),
                     "result": extrinsic.success,
                     # "address": extrinsic.address if extrinsic.address else None,
                     # "module": extrinsic.module_id,
                     # "fee": None,
                     # "nonce": extrinsic.nonce if extrinsic.nonce else None,
                     # "call": extrinsic.call_id,
-                    "operation":'{}({})'.format(extrinsic.module_id, extrinsic.call_id),
+                    "operation": '{}({})'.format(extrinsic.module_id, extrinsic.call_id),
                     "params": extrinsic.params
                     # "signature": extrinsic.signature if extrinsic.signature else None
                 } for extrinsic in extrinsics]
@@ -343,29 +342,35 @@ class GetBlockInfoByKeyResource(BaseResource):
             resp.media = {'result': 'Block not found'}
 
     def getEventDesc(self, moduleId, eventId):
-        runtimeEvent = RuntimeEvent.query(self.session).filter(and_(RuntimeEvent.module_id == moduleId, RuntimeEvent.event_id == eventId)).first()
+        runtimeEvent = RuntimeEvent.query(self.session).filter(
+            and_(RuntimeEvent.module_id == moduleId, RuntimeEvent.event_id == eventId)).first()
         if runtimeEvent:
             return runtimeEvent.documentation
         return ""
 
     def getEventHash(self, blockId, extrinsicIdx):
-        extrinsic = Extrinsic.query(self.session).filter(and_(Extrinsic.block_id == blockId, Extrinsic.extrinsic_idx == extrinsicIdx)).first()
+        extrinsic = Extrinsic.query(self.session).filter(
+            and_(Extrinsic.block_id == blockId, Extrinsic.extrinsic_idx == extrinsicIdx)).first()
         if extrinsic:
             return extrinsic.extrinsic_hash
         return None
 
+
 # 查询最近的转账交易
 class LatestTransfersResource(BaseResource):
     def on_get(self, req, resp):
-        extrinsics = Extrinsic.latest_extrinsics(self.session)
         resp.status = falcon.HTTP_200
+
+        page = int(req.params.get('page') if req.params.get('page') else 1)
+        pageSize = int(req.params.get('page_size') if req.params.get('page_size') else 10)
+        extrinsics = Extrinsic.latest_extrinsics(self.session, page, pageSize)
 
         result = []
         for extrinsic in extrinsics:
             fromAddr = ss58_encode(extrinsic.address.replace('0x', ''))
             hash = "0x{}".format(extrinsic.extrinsic_hash)
             timestamp = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S")
-            #print(extrinsic);
+            # print(extrinsic);
             # timestamp = time.mktime(extrinsic.datetime.timetuple())
 
             params = json.loads(extrinsic.params)
@@ -434,7 +439,34 @@ class LatestTransfersResource(BaseResource):
         #     'time': times.strftime("%Y%m%d%H")
         # }
 
-# 查询最近的转账交易
+# 获取所有交易信息
+class AllExtrinsicsResource(BaseResource):
+    def on_get(self, req, resp):
+        page = int(req.params.get('page') if req.params.get('page') else 1)
+        pageSize = int(req.params.get('page_size') if req.params.get('page_size') else 10)
+
+        resp.status = falcon.HTTP_200
+        extrinsics = Extrinsic.all_extrinsics(self.session, page, pageSize)
+
+        result = [{
+            "extrinsic_id": '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx),
+            "hash": "0x{}".format(extrinsic.extrinsic_hash) if extrinsic.extrinsic_hash else None,
+            "age": extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S"),
+            "result": extrinsic.success,
+            "operation": '{}({})'.format(extrinsic.module_id, extrinsic.call_id),
+            "params": extrinsic.params,
+            "address": extrinsic.address if extrinsic.address else None,
+            "nonce": extrinsic.nonce if extrinsic.nonce else None,
+            "signature": extrinsic.signature if extrinsic.signature else None
+        } for extrinsic in extrinsics]
+
+        count = Extrinsic.query(self.session).count()
+        resp.media = {
+            'status': 'success',
+            'data': {'result': result, 'count': count}
+        }
+
+# 查询Block metadata信息
 class BlockMetadataInfo(BaseResource):
     def on_post(self, req, resp):
         blockHash = None
