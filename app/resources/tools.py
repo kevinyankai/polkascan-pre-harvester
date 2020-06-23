@@ -27,7 +27,8 @@ from scalecodec.metadata import MetadataDecoder
 from sqlalchemy import and_
 from substrateinterface import SubstrateInterface, StorageFunctionNotFound
 
-from app.models.data import Block, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent, BlockTotal
+from app.models.data import Block, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent, BlockTotal, RuntimeModule, \
+    RuntimeCall
 from app.resources.base import BaseResource
 from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
 from app.tasks import balance_snapshot
@@ -367,9 +368,11 @@ class LatestTransfersResource(BaseResource):
 
         result = []
         for extrinsic in extrinsics:
+            extrinsicId= '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx),
             fromAddr = ss58_encode(extrinsic.address.replace('0x', ''))
             hash = "0x{}".format(extrinsic.extrinsic_hash)
             timestamp = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S")
+            blockId = extrinsic.block_id
             # print(extrinsic);
             # timestamp = time.mktime(extrinsic.datetime.timetuple())
 
@@ -382,6 +385,8 @@ class LatestTransfersResource(BaseResource):
                     coin = param.get('value') / 1000000  # 转换为单位 micro
 
             result.append({
+                "extrinsic_id": extrinsicId,
+                "block_id": blockId,
                 "from": fromAddr,
                 "to": toAddr,
                 "hash": hash,
@@ -439,17 +444,27 @@ class LatestTransfersResource(BaseResource):
         #     'time': times.strftime("%Y%m%d%H")
         # }
 
+
 # 获取所有交易信息
 class AllExtrinsicsResource(BaseResource):
     def on_get(self, req, resp):
         page = int(req.params.get('page') if req.params.get('page') else 1)
-        pageSize = int(req.params.get('page_size') if req.params.get('page_size') else 10)
+        pageSize = int(req.params.get('page_size') if req.params.get('page_size') else 20)
+        moduleId = req.params.get('module_id') if req.params.get('module_id') else None
+        callId = req.params.get('call_id') if req.params.get('call_id') else None
+
+        if moduleId == 'All':
+            moduleId = None
+
+        if callId == 'All':
+            callId = None
 
         resp.status = falcon.HTTP_200
-        extrinsics = Extrinsic.all_extrinsics(self.session, page, pageSize)
+        extrinsics = Extrinsic.all_extrinsics(self.session, page, pageSize, moduleId, callId)
 
         result = [{
             "extrinsic_id": '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx),
+            "block_id": extrinsic.block_id,
             "hash": "0x{}".format(extrinsic.extrinsic_hash) if extrinsic.extrinsic_hash else None,
             "age": extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S"),
             "result": extrinsic.success,
@@ -460,14 +475,20 @@ class AllExtrinsicsResource(BaseResource):
             "signature": extrinsic.signature if extrinsic.signature else None
         } for extrinsic in extrinsics]
 
-        count = Extrinsic.query(self.session).count()
+        if moduleId and callId:
+            count = Extrinsic.query(self.session).filter(and_(Extrinsic.module_id == moduleId, Extrinsic.call_id == callId)).count()
+        elif moduleId:
+            count = Extrinsic.query(self.session).filter(Extrinsic.module_id == moduleId).count()
+        else:
+            count = Extrinsic.query(self.session).count()
         resp.media = {
             'status': 'success',
             'data': {'result': result, 'count': count}
         }
 
+
 # 查询Block metadata信息
-class BlockMetadataInfo(BaseResource):
+class BlockMetadataInfoResource(BaseResource):
     def on_post(self, req, resp):
         blockHash = None
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
@@ -484,4 +505,43 @@ class BlockMetadataInfo(BaseResource):
         resp.media = {
             'status': 'success',
             'data': metadata
+        }
+
+
+class ModuleInfoResource(BaseResource):
+    def on_post(self, req, resp):
+        resp.status = falcon.HTTP_200
+
+        modules = RuntimeModule.get_module_info(self.session)
+        result = []
+        result.append({"text": "All", "value": "All"})
+        for module in modules:
+            result.append({
+                "text": module.name,
+                "value": module.module_id
+            })
+
+        resp.media = {
+            'status': 'success',
+            'data': result
+        }
+
+class CallInfoRresource(BaseResource):
+    def on_post(self, req, resp):
+        resp.status = falcon.HTTP_200
+
+        result = []
+        moduleId = req.media.get('module_id') if req.media.get('module_id') else None
+        if moduleId:
+            calls = RuntimeCall.get_call_info(self.session, moduleId)
+            result.append({"text": "All", "value": "All"})
+            for call in calls:
+                result.append({
+                    "text": call.name,
+                    "value": call.call_id
+                })
+
+        resp.media = {
+            'status': 'success',
+            'data': result
         }

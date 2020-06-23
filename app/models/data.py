@@ -133,6 +133,7 @@ class Block(BaseModel):
                                          """), {"page": (page - 1) * pageSize, "page_size": pageSize}
                                )
 
+
 class BlockTotal(BaseModel):
     __tablename__ = 'data_block_total'
 
@@ -236,7 +237,7 @@ class Extrinsic(BaseModel):
     def latest_extrinsics(cls, session, page, pageSize):
         return session.execute(text("""
                                         SELECT 
-                                            e.address, e.extrinsic_hash, e.params, b.datetime 
+                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.params, b.datetime 
                                         FROM 
                                             data_extrinsic e 
                                         LEFT JOIN 
@@ -253,10 +254,51 @@ class Extrinsic(BaseModel):
                                )
 
     @classmethod
-    def all_extrinsics(cls, session, page, pageSize):
-        return session.execute(text("""
+    def all_extrinsics(cls, session, page = 1, pageSize = 10, moduleId = None, callId = None):
+        if moduleId is not None and callId is not None:
+            sql = text("""
                                         SELECT 
-                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.signed, e.module_id, e.call_id, e.params, e.success, b.datetime  
+                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.signed, e.module_id, e.call_id, e.params, e.success, e.nonce, e.signature, b.datetime as datetime 
+                                        FROM 
+                                            data_extrinsic e 
+                                        LEFT JOIN 
+                                            data_block b 
+                                        ON 
+                                            e.block_id = b.id 
+                                        WHERE 
+                                            e.module_id = :module_id and e.call_id = :call_id
+                                        ORDER BY 
+                                            e.block_id DESC 
+                                        LIMIT
+                                            :page, :page_size 
+                                        """)
+            return session.execute(sql, {"module_id": moduleId, "call_id": callId, "page": (page - 1) * pageSize,
+                                               "page_size": pageSize}
+                                   )
+        elif moduleId is not None:
+            sql = text("""
+                                        SELECT 
+                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.signed, e.module_id, e.call_id, e.params, e.success, e.nonce, e.signature, b.datetime  
+                                        FROM 
+                                            data_extrinsic e 
+                                        LEFT JOIN 
+                                            data_block b 
+                                        ON 
+                                            e.block_id = b.id 
+                                        WHERE 
+                                            e.module_id = :module_id 
+                                        ORDER BY 
+                                            e.block_id DESC 
+                                        LIMIT
+                                            :page, :page_size 
+                                        """)
+            return session.execute(sql,
+                                   {"module_id": moduleId, "page": (page - 1) * pageSize, "page_size": pageSize}
+                                   )
+        else:
+            sql = text("""
+                                        SELECT 
+                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.signed, e.module_id, e.call_id, e.params, e.success, e.nonce, e.signature, b.datetime  
                                         FROM 
                                             data_extrinsic e 
                                         LEFT JOIN 
@@ -267,8 +309,10 @@ class Extrinsic(BaseModel):
                                             e.block_id DESC 
                                         LIMIT
                                             :page, :page_size 
-                                    """), {"page": (page - 1) * pageSize, "page_size": pageSize}
-                               )
+                                    """)
+            return session.execute(sql, {"page": (page - 1) * pageSize, "page_size": pageSize}
+                                   )
+
 
 class Log(BaseModel):
     __tablename__ = 'data_log'
@@ -431,7 +475,6 @@ class AccountIndexAudit(BaseModel):
     data = sa.Column(sa.JSON(), default=None, server_default=None, nullable=True)
 
 
-
 class Contract(BaseModel):
     __tablename__ = 'data_contract'
 
@@ -492,6 +535,18 @@ class RuntimeModule(BaseModel):
     def serialize_id(self):
         return '{}-{}'.format(self.spec_version, self.module_id)
 
+    @classmethod
+    def get_module_info(cls, session):
+        return session.execute(text("""
+                                                SELECT
+                                                    DISTINCT module_id, name 
+                                                FROM 
+                                                    runtime_module
+                                                ORDER BY 
+                                                    module_id 
+                                                """)
+                               )
+
 
 class RuntimeCall(BaseModel):
     __tablename__ = 'runtime_call'
@@ -511,6 +566,20 @@ class RuntimeCall(BaseModel):
 
     def serialize_id(self):
         return '{}-{}-{}'.format(self.spec_version, self.module_id, self.call_id)
+
+    @classmethod
+    def get_call_info(cls, session, moduleId):
+        return session.execute(text("""
+                                            SELECT 
+                                                DISTINCT call_id, name 
+                                            FROM 
+                                                runtime_call 
+                                            WHERE 
+                                                module_id = :module_id 
+                                            ORDER BY 
+                                                call_id 
+                                    """), {"module_id": moduleId}
+                               )
 
 
 class RuntimeCallParam(BaseModel):
@@ -813,5 +882,3 @@ class SearchIndex(BaseModel):
     account_id = sa.Column(sa.String(64), nullable=True, index=True)
     index_type_id = sa.Column(sa.Integer(), nullable=False, index=True)
     sorting_value = sa.Column(sa.Numeric(precision=65, scale=0), nullable=True, index=True)
-
-
