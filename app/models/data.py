@@ -237,7 +237,7 @@ class Extrinsic(BaseModel):
     def latest_extrinsics(cls, session, page, pageSize):
         return session.execute(text("""
                                         SELECT 
-                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.params, b.datetime 
+                                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.params, e.success, b.datetime 
                                         FROM 
                                             data_extrinsic e 
                                         LEFT JOIN 
@@ -252,6 +252,31 @@ class Extrinsic(BaseModel):
                                             :page, :page_size 
                                      """), {"page": (page - 1) * pageSize, "page_size": pageSize}
                                )
+
+    @classmethod
+    def extrinsic_by_id(cls, session, blockId, extrinsicIdx):
+        sql = text("""
+                        SELECT 
+                            e.block_id, e.extrinsic_idx, e.address, e.extrinsic_hash, e.signed, e.module_id, e.call_id, e.params, e.success, e.nonce, e.signature, m.name as module_name, c.name as call_name, c.documentation as call_desc, b.datetime as datetime 
+                        FROM 
+                            data_extrinsic e 
+                        LEFT JOIN 
+                            runtime_module m 
+                        ON 
+                            e.module_id = m.module_id 
+                        LEFT JOIN 
+                            runtime_call c 
+                        ON 
+                            e.module_id = c.module_id and e.call_id = c.call_id 
+                        LEFT JOIN 
+                            data_block b 
+                        ON 
+                            e.block_id = b.id 
+                        WHERE 
+                            e.block_id = :block_id and e.extrinsic_idx = :extrinsic_idx 
+                        LIMIT 1
+                    """)
+        return session.execute(sql, {"block_id": blockId, "extrinsic_idx": extrinsicIdx})
 
     @classmethod
     def all_extrinsics(cls, session, page = 1, pageSize = 10, moduleId = None, callId = None):

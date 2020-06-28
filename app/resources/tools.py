@@ -172,7 +172,7 @@ class MetadataResource(BaseResource):
         finalised_head_hash = substrate.get_chain_finalised_head()
         finalised_head_number = substrate.get_block_number(finalised_head_hash)
 
-        extrinsicCount = Extrinsic.query(self.session).filter(Extrinsic.signed == 1).count()
+        extrinsicCount = Extrinsic.query(self.session).count()
 
         storage_call = RuntimeStorage.query(self.session).filter_by(
             module_id='session',
@@ -368,11 +368,12 @@ class LatestTransfersResource(BaseResource):
 
         result = []
         for extrinsic in extrinsics:
-            extrinsicId= '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx),
+            extrinsicId = '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx)
             fromAddr = ss58_encode(extrinsic.address.replace('0x', ''))
             hash = "0x{}".format(extrinsic.extrinsic_hash)
             timestamp = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S")
             blockId = extrinsic.block_id
+            success = extrinsic.success
             # print(extrinsic);
             # timestamp = time.mktime(extrinsic.datetime.timetuple())
 
@@ -382,7 +383,7 @@ class LatestTransfersResource(BaseResource):
                 if name == 'dest':
                     toAddr = ss58_encode(param.get('value').replace('0x', ''))
                 elif name == 'value':
-                    coin = param.get('value') / 1000000  # 转换为单位 micro
+                    coin = param.get('value') / 1000000000000  # 转换为单位 Unit
 
             result.append({
                 "extrinsic_id": extrinsicId,
@@ -391,12 +392,18 @@ class LatestTransfersResource(BaseResource):
                 "to": toAddr,
                 "hash": hash,
                 "timestamp": timestamp,
-                "coin": coin
+                "coin": coin,
+                "result": success
             })
 
+        count = Extrinsic.query(self.session).filter(
+                and_(Extrinsic.module_id == "balances", Extrinsic.call_id == "transfer")).count()
         resp.media = {
             'status': 'success',
-            'data': result
+            'data': {
+                "result": result,
+                "count": count
+            }
         }
         # extrinsics = Extrinsic.query(self.session).filter(
         #     and_(Extrinsic.module_id == 'balances', Extrinsic.call_id == 'transfer')).order_by(
@@ -445,6 +452,91 @@ class LatestTransfersResource(BaseResource):
         # }
 
 
+# 根据交易ID获取交易详细信息
+class ExtrinsicDetailResource(BaseResource):
+    def on_get(self, req, resp):
+        resp.status = falcon.HTTP_200
+        extrinsicId = req.params.get('extrinsic_id')
+        if extrinsicId is None:
+            resp.status = falcon.HTTP_BAD_REQUEST
+            resp.media = {'errors': ['Invalid extrinsic id']}
+
+        split = extrinsicId.split("-")
+        if split is None or len(split) != 2:
+            resp.status = falcon.HTTP_BAD_REQUEST
+            resp.media = {'errors': ['Invalid extrinsic id']}
+
+        blockId = split[0]
+        extrinsicIdx = split[1]
+        extrinsic = Extrinsic.extrinsic_by_id(self.session, blockId, extrinsicIdx).first()
+        print(extrinsic.extrinsic_idx)
+        extrinsicDetailInfo = {}
+        if extrinsic is not None:
+            extrinsicDetailInfo["extrinsic_id"] = '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx)
+            extrinsicDetailInfo["block_id"] = extrinsic.block_id
+            extrinsicDetailInfo["extrinsic_idx"] = extrinsic.extrinsic_idx
+            extrinsicDetailInfo["hash"] = "0x{}".format(extrinsic.extrinsic_hash) if extrinsic.extrinsic_hash else None
+            extrinsicDetailInfo["age"] = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S")
+            extrinsicDetailInfo["result"] = extrinsic.success
+            extrinsicDetailInfo["operation"] = '{}({})'.format(extrinsic.module_id, extrinsic.call_id)
+            extrinsicDetailInfo["module_id"] = extrinsic.module_id
+            extrinsicDetailInfo["call_id"] = extrinsic.call_id
+            extrinsicDetailInfo["module_name"] = extrinsic.module_name.capitalize()
+            extrinsicDetailInfo["call_name"] = extrinsic.call_name.capitalize()
+            extrinsicDetailInfo["call_desc"] = extrinsic.call_desc
+            extrinsicDetailInfo["nonce"] = int(extrinsic.nonce) if extrinsic.nonce else None
+            extrinsicDetailInfo["signature"] = extrinsic.signature if extrinsic.signature else None
+            extrinsicDetailInfo["params"] = extrinsic.params
+            extrinsicDetailInfo["from"] = extrinsic.address.replace('0x', '') if extrinsic.address else None
+            extrinsicDetailInfo["from_addr"] = ss58_encode(extrinsic.address.replace('0x', '')) if extrinsic.address else None
+
+            params = json.loads(extrinsic.params)
+            for param in params:
+                name = param.get('name')
+                if name == 'dest':
+                    toAddr = ss58_encode(param.get('value').replace('0x', ''))
+                    extrinsicDetailInfo['to'] = param.get('value').replace('0x', '')
+                    extrinsicDetailInfo['to_addr'] = toAddr
+                elif name == 'value':
+                    coin = param.get('value') / 1000000000000  # 转换为单位 Unit
+                    extrinsicDetailInfo['coin'] = coin
+
+            # 获取和区块相关的事件信息
+            events = Event.query(self.session).filter(Event.block_id == extrinsic.block_id).all()
+            eventObj = [{
+                "id": '{}-{}'.format(extrinsic.block_id, event.event_idx),
+                "block_id": extrinsic.block_id,
+                "module_id": event.module_id,
+                "event_id": event.event_id,
+                "attributes": event.attributes,
+                "operation": '{}({})'.format(event.module_id, event.event_id),
+                "desc": self.getEventDesc(event.module_id, event.event_id),
+                "hash": self.getEventHash(extrinsic.block_id, event.extrinsic_idx)
+            } for event in events]
+
+        resp.media = {
+            'status': 'success',
+            'data': {
+                "extrinsic_detail": extrinsicDetailInfo,
+                "events": eventObj,
+                "event_count": len(eventObj)
+            }
+        }
+
+    def getEventDesc(self, moduleId, eventId):
+        runtimeEvent = RuntimeEvent.query(self.session).filter(
+            and_(RuntimeEvent.module_id == moduleId, RuntimeEvent.event_id == eventId)).first()
+        if runtimeEvent:
+            return runtimeEvent.documentation
+        return ""
+
+    def getEventHash(self, blockId, extrinsicIdx):
+        extrinsic = Extrinsic.query(self.session).filter(
+            and_(Extrinsic.block_id == blockId, Extrinsic.extrinsic_idx == extrinsicIdx)).first()
+        if extrinsic:
+            return extrinsic.extrinsic_hash
+        return None
+
 # 获取所有交易信息
 class AllExtrinsicsResource(BaseResource):
     def on_get(self, req, resp):
@@ -476,7 +568,8 @@ class AllExtrinsicsResource(BaseResource):
         } for extrinsic in extrinsics]
 
         if moduleId and callId:
-            count = Extrinsic.query(self.session).filter(and_(Extrinsic.module_id == moduleId, Extrinsic.call_id == callId)).count()
+            count = Extrinsic.query(self.session).filter(
+                and_(Extrinsic.module_id == moduleId, Extrinsic.call_id == callId)).count()
         elif moduleId:
             count = Extrinsic.query(self.session).filter(Extrinsic.module_id == moduleId).count()
         else:
@@ -525,6 +618,7 @@ class ModuleInfoResource(BaseResource):
             'status': 'success',
             'data': result
         }
+
 
 class CallInfoRresource(BaseResource):
     def on_post(self, req, resp):

@@ -35,7 +35,7 @@ from app.resources.harvester import PolkascanStartHarvesterResource, PolkascanSt
 from app.resources.tools import ExtractMetadataResource, ExtractExtrinsicsResource, MetadataResource, \
     HealthCheckResource, ExtractEventsResource, LatestBlocksResource, LatestTransfersResource, \
     GetBlockInfoByKeyResource, CreateSnapshotResource, BlockMetadataInfoResource, AllExtrinsicsResource, \
-    ModuleInfoResource, CallInfoRresource
+    ModuleInfoResource, CallInfoRresource, ExtrinsicDetailResource
 
 # Database connection
 engine = create_engine(DB_CONNECTION, echo=DEBUG, isolation_level="READ_UNCOMMITTED")
@@ -73,3 +73,4 @@ app.add_route('/block-metadata', BlockMetadataInfoResource())
 app.add_route('/extrinsics-info', AllExtrinsicsResource())
 app.add_route('/module-info', ModuleInfoResource())
 app.add_route('/call-info', CallInfoRresource())
+app.add_route('/extrinsic-detail', ExtrinsicDetailResource())
