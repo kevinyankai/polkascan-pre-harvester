@@ -33,8 +33,8 @@ DB_CONNECTION = os.environ.get("DB_CONNECTION", "mysql+mysqlconnector://{}:{}@{}
     DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
 ))
 
-CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://172.18.0.4:6379/0")
-CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://172.18.0.4:6379/1")
+CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://182.92.206.206:6379/0")
+CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://182.92.206.206:6379/1")
 # CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://192.168.1.141:6379/0")
 # CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://192.168.1.141:6379/1")
 PYTHONPATH=os.environ.get("PYTHONPATH","/usr/src/app")
