@@ -40,7 +40,6 @@ CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://182.92.206.206:6379/1")
 PYTHONPATH=os.environ.get("PYTHONPATH","/usr/src/app")
 ENVIRONMENT=os.environ.get("ENVIRONMENT","dev")
 
-#SUBSTRATE_RPC_URL = os.environ.get("SUBSTRATE_RPC_URL", "http://substrate-node:9933/")
 SUBSTRATE_RPC_URL = os.environ.get("SUBSTRATE_RPC_URL", "ws://103.224.250.17:39003/")
 SUBSTRATE_ADDRESS_TYPE = int(os.environ.get("SUBSTRATE_ADDRESS_TYPE", 42))
 
