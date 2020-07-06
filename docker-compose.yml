@@ -17,12 +17,13 @@ services:
       - CELERY_BACKEND=redis://192.168.1.141:6379/1
       - PYTHONPATH=/usr/src/app
       - ENVIRONMENT=dev
-      - SUBSTRATE_METADATA_VERSION=10
+      - SUBSTRATE_METADATA_VERSION=11
       - DB_USERNAME=root
       - DB_PASSWORD=root
       - DB_HOST=192.168.1.141
       - DB_NAME=polkascan
       - DB_PORT=3306
+      - DEBUG=True
       - DB_CONNECTION=mysql+mysqlconnector://root:root@192.168.1.141:3306/polkascan
 #      - DB_CONNECTION=mysql+mysqlconnector://root:root@103.224.250.17:3307/polkascan
       - TZ=Asia/Shanghai

@@ -172,7 +172,7 @@ class MetadataResource(BaseResource):
         substrate = SubstrateInterface(url=SUBSTRATE_RPC_URL, address_type=SUBSTRATE_ADDRESS_TYPE,
                                        type_registry_preset=TYPE_REGISTRY)
         resp.status = falcon.HTTP_200
-        head = Block.get_head(self.session);
+        # head = Block.get_head(self.session);
         head_hash = substrate.get_chain_head()
         head_number = substrate.get_block_number(head_hash)
         finalised_head_hash = substrate.get_chain_finalised_head()
@@ -180,39 +180,25 @@ class MetadataResource(BaseResource):
 
         extrinsicCount = Extrinsic.query(self.session).count()
 
-        storage_call = RuntimeStorage.query(self.session).filter_by(
-            module_id='session',
-            name='Validators',
-            spec_version=head.spec_version_id
-        ).first()
+        try:
+            validators = substrate.get_runtime_state(
+                module="Session",
+                storage_function="Validators",
+                params=[],
+                block_hash=head_hash
+            ).get('result', [])
+        except StorageFunctionNotFound:
+            validators = []
 
-        if storage_call:
-            try:
-                validators = substrate.get_runtime_state(
-                    module="Session",
-                    storage_function="Validators",
-                    params=[],
-                    block_hash=head_hash
-                ).get('result', [])
-            except StorageFunctionNotFound:
-                validators = []
-
-        storage_call = RuntimeStorage.query(self.session).filter_by(
-            module_id='staking',
-            name='ValidatorCount',
-            spec_version=head.spec_version_id
-        ).first()
-
-        if storage_call:
-            try:
-                validator_count = substrate.get_runtime_state(
-                    module="Staking",
-                    storage_function="ValidatorCount",
-                    params=[],
-                    block_hash=head_hash
-                ).get('result', 0)
-            except StorageFunctionNotFound:
-                validator_count = 0
+        try:
+            validator_count = substrate.get_runtime_state(
+                module="Staking",
+                storage_function="ValidatorCount",
+                params=[],
+                block_hash=head_hash
+            ).get('result', 0)
+        except StorageFunctionNotFound:
+            validator_count = 0
 
         transfers_count = Extrinsic.query(self.session).filter(
             and_(Extrinsic.module_id == 'balances', Extrinsic.call_id == 'transfer')).count()
@@ -275,7 +261,7 @@ class GetBlockInfoByKeyResource(BaseResource):
             resp.status = falcon.HTTP_200
             block = Block.query(self.session).filter(Block.hash == blockHash).first()
             blockTotal = BlockTotal.query(self.session).filter(BlockTotal.id == block.id).first()
-            author = ss58_encode(blockTotal.author.replace('0x', '')) if blockTotal is not None else None
+            author = ss58_encode(blockTotal.author.replace('0x', '')) if blockTotal is not None and blockTotal.author is not None else None
 
             if block:
                 blockInfo = {}
@@ -377,7 +363,7 @@ class LatestTransfersResource(BaseResource):
             extrinsicId = '{}-{}'.format(extrinsic.block_id, extrinsic.extrinsic_idx)
             fromAddr = ss58_encode(extrinsic.address.replace('0x', ''))
             hash = "0x{}".format(extrinsic.extrinsic_hash)
-            timestamp = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S")
+            timestamp = extrinsic.datetime.strftime("%Y-%m-%d %H:%M:%S") if extrinsic.datetime is not None else None
             blockId = extrinsic.block_id
             success = extrinsic.success
             # print(extrinsic);
