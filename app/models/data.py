@@ -213,7 +213,7 @@ class Extrinsic(BaseModel):
     address = sa.Column(sa.String(64), index=True)
     account_index = sa.Column(sa.String(16), index=True)
     account_idx = sa.Column(sa.Integer(), index=True)
-    signature = sa.Column(sa.String(128))
+    signature = sa.Column(sa.String(130))
     nonce = sa.Column(sa.Integer())
 
     era = sa.Column(sa.String(4))
@@ -492,12 +492,13 @@ class AccountIndexAudit(BaseModel):
 
     id = sa.Column(sa.Integer(), primary_key=True, autoincrement=True)
     account_index_id = sa.Column(sa.Integer(), nullable=True, index=True)
-    account_id = sa.Column(sa.String(64), index=True, nullable=False)
+    account_id = sa.Column(sa.String(64), index=True, nullable=True)
     block_id = sa.Column(sa.Integer(), index=True, nullable=False)
     extrinsic_idx = sa.Column(sa.Integer())
     event_idx = sa.Column(sa.Integer())
     type_id = sa.Column(sa.Integer(), nullable=False)
     data = sa.Column(sa.JSON(), default=None, server_default=None, nullable=True)
+
 
 
 class Contract(BaseModel):
@@ -699,6 +700,7 @@ class RuntimeErrorMessage(BaseModel):
     id = sa.Column(sa.Integer(), primary_key=True)
     spec_version = sa.Column(sa.Integer())
     module_id = sa.Column(sa.String(64))
+    module_index = sa.Column(sa.Integer())
     index = sa.Column(sa.Integer())
     name = sa.Column(sa.String(255), index=True)
     documentation = sa.Column(sa.Text())
@@ -820,7 +822,7 @@ class ReorgExtrinsic(BaseModel):
     address = sa.Column(sa.String(64), index=True)
     account_index = sa.Column(sa.String(16), index=True)
     account_idx = sa.Column(sa.Integer(), index=True)
-    signature = sa.Column(sa.String(128))
+    signature = sa.Column(sa.String(130))
     nonce = sa.Column(sa.Integer())
 
     era = sa.Column(sa.String(4))
@@ -907,3 +909,5 @@ class SearchIndex(BaseModel):
     account_id = sa.Column(sa.String(64), nullable=True, index=True)
     index_type_id = sa.Column(sa.Integer(), nullable=False, index=True)
     sorting_value = sa.Column(sa.Numeric(precision=65, scale=0), nullable=True, index=True)
+
+

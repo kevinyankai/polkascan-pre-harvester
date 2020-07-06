@@ -21,8 +21,12 @@ import json
 import time
 
 import falcon
+
+from app.processors.converters import PolkascanHarvesterService
+from app.resources.base import BaseResource
+
 from scalecodec.base import ScaleBytes
-from scalecodec.block import ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
+from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
 from scalecodec.metadata import MetadataDecoder
 from sqlalchemy import and_
 from substrateinterface import SubstrateInterface, StorageFunctionNotFound
@@ -73,7 +77,7 @@ class ExtractExtrinsicsResource(BaseResource):
             # Get metadata
             metadata_decoder = substrate.get_block_metadata(json_block['block']['header']['parentHash'])
 
-            # result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
+            #result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
             result = []
 
             for extrinsic in extrinsics:
@@ -90,6 +94,7 @@ class ExtractExtrinsicsResource(BaseResource):
 class ExtractEventsResource(BaseResource):
 
     def on_get(self, req, resp):
+
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         # Get Parent hash
@@ -102,8 +107,7 @@ class ExtractEventsResource(BaseResource):
         events_decoder = substrate.get_block_events(req.params.get('block_hash'), metadata_decoder=metadata_decoder)
 
         resp.status = falcon.HTTP_201
-        resp.media = {'events': events_decoder.value,
-                      'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
+        resp.media = {'events': events_decoder.value, 'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
 
 
 class HealthCheckResource(BaseResource):
@@ -114,6 +118,7 @@ class HealthCheckResource(BaseResource):
 class StorageValidatorResource(BaseResource):
 
     def on_get(self, req, resp):
+
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         resp.status = falcon.HTTP_200
@@ -150,6 +155,7 @@ class StorageValidatorResource(BaseResource):
 class CreateSnapshotResource(BaseResource):
 
     def on_post(self, req, resp):
+
         task = balance_snapshot.delay(
             account_id=req.media.get('account_id'),
             block_start=req.media.get('block_start'),

@@ -248,14 +248,16 @@ class NewSessionEventProcessor(EventProcessor):
 
         if storage_call:
             try:
-                validators = substrate.get_runtime_state(
+                validators = substrate.get_storage(
+                    block_hash=self.block.hash,
                     module="Session",
-                    storage_function="Validators",
-                    params=[],
-                    block_hash=self.block.hash
-                ).get('result', [])
-            except StorageFunctionNotFound:
-                validators = []
+                    function="Validators",
+                    return_scale_type=storage_call.get_return_type(),
+                    hasher=storage_call.type_hasher,
+                    metadata_version=SUBSTRATE_METADATA_VERSION
+                ) or []
+            except RemainingScaleBytesNotEmptyException:
+                pass
 
         # Retrieve all sessions in one call
         if not LEGACY_SESSION_VALIDATOR_LOOKUP:

@@ -17,7 +17,7 @@ services:
       - CELERY_BACKEND=redis://192.168.1.141:6379/1
       - PYTHONPATH=/usr/src/app
       - ENVIRONMENT=dev
-      - SUBSTRATE_METADATA_VERSION=11
+      - SUBSTRATE_METADATA_VERSION=10
       - DB_USERNAME=root
       - DB_PASSWORD=root
       - DB_HOST=192.168.1.141
