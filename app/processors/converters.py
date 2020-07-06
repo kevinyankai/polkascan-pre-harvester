@@ -205,6 +205,7 @@ class PolkascanHarvesterService(BaseService):
     def process_metadata(self, spec_version, block_hash):
 
         # Check if metadata already in store
+        print('Process Metadata', block_hash)
         if spec_version not in self.metadata_store:
             print('Metadata: CACHE MISS', spec_version)
 

@@ -59,8 +59,7 @@ TYPE_REGISTRY_FILE = os.environ.get("TYPE_REGISTRY_FILE")
 FINALIZATION_BY_BLOCK_CONFIRMATIONS = int(os.environ.get("FINALIZATION_BY_BLOCK_CONFIRMATIONS", 0))
 FINALIZATION_ONLY = int(os.environ.get("FINALIZATION_ONLY", 0))
 
-DEBUG = bool(os.environ.get("DEBUG", True))
-# DEBUG = bool(os.environ.get("DEBUG", False))
+DEBUG = bool(os.environ.get("DEBUG", False))
 
 BALANCE_FULL_SNAPSHOT_INTERVAL = 10000
 CELERY_RUNNING = True
