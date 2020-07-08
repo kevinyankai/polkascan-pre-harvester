@@ -21,9 +21,9 @@
 import os
 
 DB_NAME = os.environ.get("DB_NAME", "polkascan")
-DB_HOST = os.environ.get("DB_HOST", "192.168.1.141")
-# DB_HOST = os.environ.get("DB_HOST", "103.224.250.17")
-DB_PORT = os.environ.get("DB_PORT", 3306)
+# DB_HOST = os.environ.get("DB_HOST", "192.168.1.141")
+DB_HOST = os.environ.get("DB_HOST", "103.224.250.17")
+DB_PORT = os.environ.get("DB_PORT", 3307)
 DB_USERNAME = os.environ.get("DB_USERNAME", "root")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "root")
 # DB_USERNAME = os.environ.get("DB_USERNAME", "root")
@@ -33,15 +33,15 @@ DB_CONNECTION = os.environ.get("DB_CONNECTION", "mysql+mysqlconnector://{}:{}@{}
     DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
 ))
 
-# CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://103.224.250.17:6379/0")
-# CELERY_BACKEND=os.environ.get("CELERY_BACKEND", "redis://103.224.250.17:6379/1")
-CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://192.168.1.141:6379/0")
-CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://192.168.1.141:6379/1")
+CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://103.224.250.17:6379/0")
+CELERY_BACKEND=os.environ.get("CELERY_BACKEND", "redis://103.224.250.17:6379/1")
+# CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://192.168.1.141:6379/0")
+# CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://192.168.1.141:6379/1")
 PYTHONPATH=os.environ.get("PYTHONPATH","/usr/src/app")
 ENVIRONMENT=os.environ.get("ENVIRONMENT","dev")
 
 SUBSTRATE_RPC_URL = os.environ.get("SUBSTRATE_RPC_URL", "ws://103.224.250.17:39003/")
-SUBSTRATE_ADDRESS_TYPE = int(os.environ.get("SUBSTRATE_ADDRESS_TYPE", 42))
+SUBSTRATE_ADDRESS_TYPE = int(os.environ.get("SUBSTRATE_ADDRESS_TYPE", 2))
 
 SUBSTRATE_TREASURY_ACCOUNTS = [
     "6d6f646c70792f74727372790000000000000000000000000000000000000000",
@@ -55,6 +55,7 @@ SUBSTRATE_MOCK_EXTRINSICS = os.environ.get("SUBSTRATE_MOCK_EXTRINSICS", None)
 
 TYPE_REGISTRY = os.environ.get("TYPE_REGISTRY", "default")
 TYPE_REGISTRY_FILE = os.environ.get("TYPE_REGISTRY_FILE")
+# TYPE_REGISTRY_FILE = os.environ.get("TYPE_REGISTRY_FILE", "app/type_registry/custom_types.json")
 
 FINALIZATION_BY_BLOCK_CONFIRMATIONS = int(os.environ.get("FINALIZATION_BY_BLOCK_CONFIRMATIONS", 0))
 FINALIZATION_ONLY = int(os.environ.get("FINALIZATION_ONLY", 0))

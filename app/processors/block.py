@@ -19,23 +19,19 @@
 #  block.py
 #
 import binascii
-import dateutil
-from sqlalchemy import distinct
 
+import dateutil
+from scalecodec.base import ScaleBytes, RuntimeConfiguration
+from scalecodec.block import LogDigest
+from sqlalchemy import distinct
 from sqlalchemy.orm.exc import NoResultFound
 from substrateinterface.utils.hasher import blake2_256
 
 from app import settings
-from substrateinterface.utils.hasher import blake2_256
-
 from app.models.data import Log, AccountAudit, Account, AccountIndexAudit, AccountIndex, \
     SessionValidator, IdentityAudit, IdentityJudgementAudit, IdentityJudgement, SearchIndex, AccountInfoSnapshot
-
-from app.utils.ss58 import ss58_encode, ss58_encode_account_index
-from scalecodec.base import ScaleBytes, RuntimeConfiguration
-
 from app.processors.base import BlockProcessor
-from scalecodec.block import LogDigest
+from app.utils.ss58 import ss58_encode, ss58_encode_account_index
 
 
 class LogBlockProcessor(BlockProcessor):
@@ -45,6 +41,7 @@ class LogBlockProcessor(BlockProcessor):
         self.block.count_log = len(self.block.logs)
 
         for idx, log_data in enumerate(self.block.logs):
+
             log_digest = LogDigest(ScaleBytes(log_data))
             log_digest.decode()
 

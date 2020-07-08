@@ -205,7 +205,6 @@ class PolkascanHarvesterService(BaseService):
     def process_metadata(self, spec_version, block_hash):
 
         # Check if metadata already in store
-        print('Process Metadata', block_hash)
         if spec_version not in self.metadata_store:
             print('Metadata: CACHE MISS', spec_version)
 
@@ -217,9 +216,10 @@ class PolkascanHarvesterService(BaseService):
                 self.metadata_store[spec_version] = self.substrate.get_block_metadata(block_hash=block_hash)
 
             else:
+                print('Processing metadata......')
+                self.substrate.init_runtime(block_hash=block_hash)
                 self.db_session.begin(subtransactions=True)
                 try:
-
                     # Store metadata in database
                     runtime = Runtime(
                         id=spec_version,
@@ -434,7 +434,9 @@ class PolkascanHarvesterService(BaseService):
 
                     # Put in local store
                     self.metadata_store[spec_version] = self.substrate.metadata_decoder
+                    print('Metadata processing finished......')
                 except SQLAlchemyError as e:
+                    print(e)
                     self.db_session.rollback()
 
     def add_block(self, block_hash):
@@ -447,7 +449,6 @@ class PolkascanHarvesterService(BaseService):
             self.substrate.mock_extrinsics = settings.SUBSTRATE_MOCK_EXTRINSICS
 
         json_block = self.substrate.get_chain_block(block_hash)
-
         parent_hash = json_block['block']['header'].pop('parentHash')
         block_id = json_block['block']['header'].pop('number')
         extrinsics_root = json_block['block']['header'].pop('extrinsicsRoot')

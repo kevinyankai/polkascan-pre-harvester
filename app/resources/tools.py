@@ -18,23 +18,20 @@
 #
 #  tools.py
 import json
-import time
 
 import falcon
-
-from app.processors.converters import PolkascanHarvesterService
-from app.resources.base import BaseResource
-
 from scalecodec.base import ScaleBytes
-from scalecodec.block import EventsDecoder, ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
+from scalecodec.block import ExtrinsicsDecoder, ExtrinsicsBlock61181Decoder
 from scalecodec.metadata import MetadataDecoder
 from sqlalchemy import and_
 from substrateinterface import SubstrateInterface, StorageFunctionNotFound
 
-from app.models.data import Block, RuntimeStorage, Extrinsic, Log, Event, RuntimeEvent, BlockTotal, RuntimeModule, \
-    RuntimeCall
+from app.models.data import Block, Extrinsic, Log, Event, RuntimeEvent, BlockTotal, RuntimeModule, \
+    RuntimeCall, Runtime
+from app.processors.converters import PolkascanHarvesterService
 from app.resources.base import BaseResource
-from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE
+from app.settings import SUBSTRATE_RPC_URL, SUBSTRATE_METADATA_VERSION, TYPE_REGISTRY, SUBSTRATE_ADDRESS_TYPE, \
+    TYPE_REGISTRY_FILE
 from app.tasks import balance_snapshot
 from app.utils.ss58 import ss58_encode
 
@@ -77,7 +74,7 @@ class ExtractExtrinsicsResource(BaseResource):
             # Get metadata
             metadata_decoder = substrate.get_block_metadata(json_block['block']['header']['parentHash'])
 
-            #result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
+            # result = [{'runtime': substrate.get_block_runtime_version(req.params.get('block_hash')), 'metadata': metadata_result.get_data_dict()}]
             result = []
 
             for extrinsic in extrinsics:
@@ -94,7 +91,6 @@ class ExtractExtrinsicsResource(BaseResource):
 class ExtractEventsResource(BaseResource):
 
     def on_get(self, req, resp):
-
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         # Get Parent hash
@@ -107,7 +103,8 @@ class ExtractEventsResource(BaseResource):
         events_decoder = substrate.get_block_events(req.params.get('block_hash'), metadata_decoder=metadata_decoder)
 
         resp.status = falcon.HTTP_201
-        resp.media = {'events': events_decoder.value, 'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
+        resp.media = {'events': events_decoder.value,
+                      'runtime': substrate.get_block_runtime_version(req.params.get('block_hash'))}
 
 
 class HealthCheckResource(BaseResource):
@@ -118,7 +115,6 @@ class HealthCheckResource(BaseResource):
 class StorageValidatorResource(BaseResource):
 
     def on_get(self, req, resp):
-
         substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
 
         resp.status = falcon.HTTP_200
@@ -155,7 +151,6 @@ class StorageValidatorResource(BaseResource):
 class CreateSnapshotResource(BaseResource):
 
     def on_post(self, req, resp):
-
         task = balance_snapshot.delay(
             account_id=req.media.get('account_id'),
             block_start=req.media.get('block_start'),
@@ -261,7 +256,8 @@ class GetBlockInfoByKeyResource(BaseResource):
             resp.status = falcon.HTTP_200
             block = Block.query(self.session).filter(Block.hash == blockHash).first()
             blockTotal = BlockTotal.query(self.session).filter(BlockTotal.id == block.id).first()
-            author = ss58_encode(blockTotal.author.replace('0x', '')) if blockTotal is not None and blockTotal.author is not None else None
+            author = ss58_encode(blockTotal.author.replace('0x',
+                                                           '')) if blockTotal is not None and blockTotal.author is not None else None
 
             if block:
                 blockInfo = {}
@@ -389,7 +385,7 @@ class LatestTransfersResource(BaseResource):
             })
 
         count = Extrinsic.query(self.session).filter(
-                and_(Extrinsic.module_id == "balances", Extrinsic.call_id == "transfer")).count()
+            and_(Extrinsic.module_id == "balances", Extrinsic.call_id == "transfer")).count()
         resp.media = {
             'status': 'success',
             'data': {
@@ -480,7 +476,8 @@ class ExtrinsicDetailResource(BaseResource):
             extrinsicDetailInfo["signature"] = extrinsic.signature if extrinsic.signature else None
             extrinsicDetailInfo["params"] = extrinsic.params
             extrinsicDetailInfo["from"] = extrinsic.address.replace('0x', '') if extrinsic.address else None
-            extrinsicDetailInfo["from_addr"] = ss58_encode(extrinsic.address.replace('0x', '')) if extrinsic.address else None
+            extrinsicDetailInfo["from_addr"] = ss58_encode(
+                extrinsic.address.replace('0x', '')) if extrinsic.address else None
 
             params = json.loads(extrinsic.params)
             for param in params:
@@ -528,6 +525,7 @@ class ExtrinsicDetailResource(BaseResource):
         if extrinsic:
             return extrinsic.extrinsic_hash
         return None
+
 
 # 获取所有交易信息
 class AllExtrinsicsResource(BaseResource):
@@ -630,4 +628,30 @@ class CallInfoRresource(BaseResource):
         resp.media = {
             'status': 'success',
             'data': result
+        }
+
+class ProcessMetadataResource(BaseResource):
+    def on_post(self, req, resp):
+        resp.status = falcon.HTTP_200
+
+        substrate = SubstrateInterface(SUBSTRATE_RPC_URL)
+        head_hash = substrate.get_chain_head()
+        substrate.init_runtime(head_hash)
+        runtime = Runtime.query(self.session).get(substrate.runtime_version)
+
+        if runtime:
+            return
+
+        harvester = PolkascanHarvesterService(
+            db_session=self.session,
+            type_registry=TYPE_REGISTRY,
+            type_registry_file=TYPE_REGISTRY_FILE
+        )
+
+        spec_version = substrate.runtime_version
+        harvester.process_metadata(spec_version, head_hash)
+        self.session.commit()
+        resp.media = {
+            'status': 'success',
+            'data': {}
         }
