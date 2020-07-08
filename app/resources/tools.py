@@ -371,7 +371,7 @@ class LatestTransfersResource(BaseResource):
                 if name == 'dest':
                     toAddr = ss58_encode(param.get('value').replace('0x', ''))
                 elif name == 'value':
-                    coin = param.get('value') / 1000000000000  # 转换为单位 Unit
+                    coin = param.get('value') / 1000000000000000  # 转换为单位 Unit
 
             result.append({
                 "extrinsic_id": extrinsicId,
