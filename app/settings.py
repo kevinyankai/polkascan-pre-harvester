@@ -22,10 +22,10 @@ import os
 
 DB_NAME = os.environ.get("DB_NAME", "polkascan")
 # DB_HOST = os.environ.get("DB_HOST", "192.168.1.141")
-DB_HOST = os.environ.get("DB_HOST", "103.224.250.17")
+DB_HOST = os.environ.get("DB_HOST", "103.224.250.19")
 DB_PORT = os.environ.get("DB_PORT", 3307)
-DB_USERNAME = os.environ.get("DB_USERNAME", "root")
-DB_PASSWORD = os.environ.get("DB_PASSWORD", "root")
+DB_USERNAME = os.environ.get("DB_USERNAME", "polkascan")
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "polkascan")
 # DB_USERNAME = os.environ.get("DB_USERNAME", "root")
 # DB_PASSWORD = os.environ.get("DB_PASSWORD", "root")
 
@@ -33,14 +33,14 @@ DB_CONNECTION = os.environ.get("DB_CONNECTION", "mysql+mysqlconnector://{}:{}@{}
     DB_USERNAME, DB_PASSWORD, DB_HOST, DB_PORT, DB_NAME
 ))
 
-CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://103.224.250.17:6379/0")
-CELERY_BACKEND=os.environ.get("CELERY_BACKEND", "redis://103.224.250.17:6379/1")
+CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://103.224.250.19:6379/0")
+CELERY_BACKEND=os.environ.get("CELERY_BACKEND", "redis://103.224.250.19:6379/1")
 # CELERY_BROKER=os.environ.get("CELERY_BROKER", "redis://192.168.1.141:6379/0")
 # CELERY_BACKEND=os.environ.get("CELERY_BACKEND","redis://192.168.1.141:6379/1")
 PYTHONPATH=os.environ.get("PYTHONPATH","/usr/src/app")
 ENVIRONMENT=os.environ.get("ENVIRONMENT","dev")
 
-SUBSTRATE_RPC_URL = os.environ.get("SUBSTRATE_RPC_URL", "ws://103.224.250.17:39003/")
+SUBSTRATE_RPC_URL = os.environ.get("SUBSTRATE_RPC_URL", "ws://103.224.250.19:39003/")
 SUBSTRATE_ADDRESS_TYPE = int(os.environ.get("SUBSTRATE_ADDRESS_TYPE", 2))
 
 SUBSTRATE_TREASURY_ACCOUNTS = [
