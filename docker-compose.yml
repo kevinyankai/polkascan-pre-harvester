@@ -11,21 +11,21 @@ services:
       - '.:/usr/src/app'
     command: ./start.sh
     environment: &env
-      - CELERY_BROKER=redis://103.224.250.17:6379/0
-      - CELERY_BACKEND=redis://103.224.250.17:6379/1
+      - CELERY_BROKER=redis://103.224.250.19:6379/0
+      - CELERY_BACKEND=redis://103.224.250.19:6379/1
 #      - CELERY_BROKER=redis://192.168.1.141:6379/0
 #      - CELERY_BACKEND=redis://192.168.1.141:6379/1
       - PYTHONPATH=/usr/src/app
       - ENVIRONMENT=dev
       - SUBSTRATE_METADATA_VERSION=11
-      - DB_USERNAME=root
-      - DB_PASSWORD=root
+      - DB_USERNAME=polkascan
+      - DB_PASSWORD=polkascan
 #      - DB_HOST=192.168.1.141
-      - DB_HOST=103.224.250.17
+      - DB_HOST=103.224.250.19
       - DB_NAME=polkascan
-      - DB_PORT=3307
+      - DB_PORT=3306
 #      - DB_CONNECTION=mysql+mysqlconnector://root:root@192.168.1.141:3306/polkascan
-      - DB_CONNECTION=mysql+mysqlconnector://root:root@103.224.250.17:3307/polkascan
+      - DB_CONNECTION=mysql+mysqlconnector://polkascan:polkascan@103.224.250.19:3306/polkascan
       - TZ=Asia/Shanghai
 #      - SET_CONTAINER_TIMEZONE=true
 #      - CONTAINER_TIMEZONE=Asia/Shanghai
@@ -64,7 +64,7 @@ services:
     ports:
       - '5555:5555'
 #    command:  flower -A app.tasks --port=5555 --broker=redis://192.168.1.141:6379/0
-    command:  flower -A app.tasks --port=5555 --broker=redis://103.224.250.17:6379/0
+    command:  flower -A app.tasks --port=5555 --broker=redis://103.224.250.19:6379/0
     #depends_on:
     #  - redis
 

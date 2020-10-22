@@ -23,7 +23,7 @@ import os
 DB_NAME = os.environ.get("DB_NAME", "polkascan")
 # DB_HOST = os.environ.get("DB_HOST", "192.168.1.141")
 DB_HOST = os.environ.get("DB_HOST", "103.224.250.19")
-DB_PORT = os.environ.get("DB_PORT", 3307)
+DB_PORT = os.environ.get("DB_PORT", 3306)
 DB_USERNAME = os.environ.get("DB_USERNAME", "polkascan")
 DB_PASSWORD = os.environ.get("DB_PASSWORD", "polkascan")
 # DB_USERNAME = os.environ.get("DB_USERNAME", "root")
